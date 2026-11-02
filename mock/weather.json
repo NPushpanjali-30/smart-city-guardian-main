@@ -1,0 +1,40 @@
+{
+  "provider": "mock-weather-service",
+  "locationName": "Metro Bay District",
+  "latitude": 40.7128,
+  "longitude": -74.0060,
+  "rainfallRateMmh": 42.5,
+  "rainfall1hMm": 34.2,
+  "rainfall24hMm": 98.6,
+  "temperatureC": 21.5,
+  "humidityPercent": 94.0,
+  "windSpeedKmh": 45.0,
+  "observedAt": "2026-09-08T09:00:00.000Z",
+  "forecast": [
+    {
+      "forecastFor": "2026-09-08T10:00:00.000Z",
+      "expectedRainfallMm": 38.0,
+      "precipitationProbability": 0.95
+    },
+    {
+      "forecastFor": "2026-09-08T11:00:00.000Z",
+      "expectedRainfallMm": 28.5,
+      "precipitationProbability": 0.85
+    },
+    {
+      "forecastFor": "2026-09-08T12:00:00.000Z",
+      "expectedRainfallMm": 12.0,
+      "precipitationProbability": 0.60
+    }
+  ],
+  "alerts": [
+    {
+      "id": "alert-wx-001",
+      "severity": "WARNING",
+      "event": "Flash Flood Warning",
+      "headline": "Flash Flood Warning issued for Metro Bay Corridor until 2:00 PM",
+      "effective": "2026-09-08T08:30:00.000Z",
+      "expires": "2026-09-08T14:00:00.000Z"
+    }
+  ]
+}

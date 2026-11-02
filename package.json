@@ -1,0 +1,42 @@
+{
+  "name": "smartcity-guardian",
+  "version": "2.1.0",
+  "description": "AI-Powered Real-Time Flood Prediction, Traffic Optimization & Emergency Response Platform",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev:web",
+    "start": "npm run dev:web",
+    "preview": "npm run preview --workspace=@smartcity/web",
+    "build": "npm run build --workspaces --if-present",
+    "build:shared": "npm run build --workspace=@smartcity/shared",
+    "build:api": "npm run build --workspace=@smartcity/api",
+    "build:backend": "npm run build --workspace=@smartcity/api",
+    "build:web": "npm run build --workspace=@smartcity/web",
+    "build:frontend": "npm run build --workspace=@smartcity/web",
+    "dev:api": "npm run dev --workspace=@smartcity/api",
+    "dev:backend": "npm run dev --workspace=@smartcity/api",
+    "dev:web": "npm run dev --workspace=@smartcity/web",
+    "dev:frontend": "npm run dev --workspace=@smartcity/web",
+    "tunnel": "cloudflared tunnel --url http://localhost:4000",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "echo 'Linting phase 1 workspace...'"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^8.0.2",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.7"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "debug": "^4.4.3",
+    "nodemailer": "^10.3.1",
+    "ws": "^8.21.3"
+  }
+}

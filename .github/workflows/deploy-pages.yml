@@ -1,0 +1,117 @@
+name: Deploy Web Demo to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & Package Static Demo
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Web Application
+        run: npm run build
+
+      - name: Prepare Static Pages Assets
+        run: |
+          touch apps/web/dist/.nojekyll
+          cp apps/web/dist/index.html apps/web/dist/404.html
+
+      - name: Validate Bundle Integrity
+        run: |
+          echo "Validating static assets in apps/web/dist..."
+          test -f apps/web/dist/index.html || { echo "::error::Missing apps/web/dist/index.html"; exit 1; }
+          test -f apps/web/dist/404.html || { echo "::error::Missing apps/web/dist/404.html"; exit 1; }
+          test -f apps/web/dist/.nojekyll || { echo "::error::Missing apps/web/dist/.nojekyll"; exit 1; }
+          test -d apps/web/dist/assets || { echo "::error::Missing apps/web/dist/assets directory"; exit 1; }
+          if [ ! -s "apps/web/dist/index.html" ]; then
+            echo "::error::index.html is empty"; exit 1;
+          fi
+          echo "Bundle validation passed successfully."
+          ls -la apps/web/dist
+
+      - name: Mirror Static Bundle to gh-pages Branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: apps/web/dist
+          keep_files: false
+          force_orphan: true
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+        continue-on-error: true
+
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v5
+        continue-on-error: true
+
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'apps/web/dist'
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: "pages"
+      cancel-in-progress: false
+    steps:
+      - name: Deploy to GitHub Pages (Attempt 1)
+        id: deployment
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Cooldown & Retry on Transient 500 Error
+        if: steps.deployment.outcome == 'failure'
+        run: |
+          echo "::warning::Initial deployment attempt failed (likely transient GitHub Pages 500 or API synchronization lock)."
+          echo "Waiting 15 seconds before retrying deployment..."
+          sleep 15
+
+      - name: Deploy to GitHub Pages (Retry Attempt 2)
+        if: steps.deployment.outcome == 'failure'
+        id: deployment_retry
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Verify Deployment Status
+        if: always()
+        run: |
+          if [ "${{ steps.deployment.outcome }}" = "success" ]; then
+            echo "✅ GitHub Pages deployment succeeded on initial attempt."
+            echo "Live URL: ${{ steps.deployment.outputs.page_url }}"
+          elif [ "${{ steps.deployment_retry.outcome }}" = "success" ]; then
+            echo "✅ GitHub Pages deployment succeeded on retry attempt."
+            echo "Live URL: ${{ steps.deployment_retry.outputs.page_url }}"
+          else
+            echo "::error::GitHub Pages deployment failed after initial and retry attempts."
+            echo "Troubleshooting steps:"
+            echo "  1. Check GitHub incident status: https://www.githubstatus.com/"
+            echo "  2. Repository Settings -> Pages: ensure Build and deployment Source is set to 'GitHub Actions'."
+            echo "  3. Repository Settings -> Environments: ensure 'github-pages' environment exists and allows deployment from 'main'."
+            exit 1
+          fi

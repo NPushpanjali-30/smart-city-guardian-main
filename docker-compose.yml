@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # SmartCity Guardian API & Core Telemetry Engine
+  # ============================================================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: smartcity-guardian-api
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - HOST=0.0.0.0
+      - MOCK_MODE=false
+      - LOG_LEVEL=info
+      - CORS_ORIGIN=*
+      - DEFAULT_CITY_NAME=Metro Central
+      - DEFAULT_CITY_LAT=40.7128
+      - DEFAULT_CITY_LON=-74.0060
+      - WEATHER_PROVIDER=open-meteo
+      - TRAFFIC_PROVIDER=mock
+      - AI_PROVIDER=grok
+      - SMS_PROVIDER=mock
+      - GROK_API_KEY=${GROK_API_KEY:-}
+      - GROK_MODEL=${GROK_MODEL:-grok-2-latest}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
+      - TWILIO_FROM_PHONE=${TWILIO_FROM_PHONE:-}
+      - RATE_LIMIT_WINDOW_MS=60000
+      - RATE_LIMIT_MAX_REQUESTS=120
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - smartcity-net
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ============================================================================
+  # SmartCity Guardian Citizen & EOC Dashboard (Nginx Reverse Proxy)
+  # ============================================================================
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: smartcity-guardian-web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    networks:
+      - smartcity-net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
+networks:
+  smartcity-net:
+    driver: bridge

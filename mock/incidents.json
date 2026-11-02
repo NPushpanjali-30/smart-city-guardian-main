@@ -1,0 +1,28 @@
+{
+  "provider": "mock-incident-stream",
+  "generatedAt": "2026-09-08T09:00:00.000Z",
+  "incidents": [
+    {
+      "id": "inc-001",
+      "type": "CLOSURE",
+      "severity": "CRITICAL",
+      "description": "Flash flood barrier deployed at Bay Street Underpass",
+      "latitude": 40.7150,
+      "longitude": -74.0080,
+      "roadSegmentId": "road-bay-st-001",
+      "isBlocking": true,
+      "startedAt": "2026-09-08T08:45:00.000Z"
+    },
+    {
+      "id": "inc-002",
+      "type": "HAZARD",
+      "severity": "WARNING",
+      "description": "Localized water pooling in right lane on Market Street",
+      "latitude": 40.7210,
+      "longitude": -74.0080,
+      "roadSegmentId": "road-market-st-003",
+      "isBlocking": false,
+      "startedAt": "2026-09-08T08:50:00.000Z"
+    }
+  ]
+}

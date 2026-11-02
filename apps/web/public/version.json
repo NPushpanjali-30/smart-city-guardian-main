@@ -1,0 +1,7 @@
+{
+  "version": "2.1.0",
+  "versionCode": 210,
+  "releaseDate": "2026-10-29T21:55:00.000Z",
+  "releaseNotes": "Decluttered standalone mobile interface, zero-delay emergency broadcast dispatch, background push alerts when app is closed, and automatic OTA app updates.",
+  "mandatory": true
+}

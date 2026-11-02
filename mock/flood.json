@@ -1,0 +1,76 @@
+{
+  "provider": "mock-hydrology-service",
+  "evaluatedAt": "2026-09-08T09:00:00.000Z",
+  "citySummary": {
+    "overallSeverity": "WARNING",
+    "compositeRiskScore": 68.5,
+    "activeHighRiskZonesCount": 3,
+    "totalMonitoredZones": 9
+  },
+  "zones": [
+    {
+      "zoneId": "zone-bay-basin-01",
+      "zoneName": "Bay Basin Lowlands",
+      "severity": "CRITICAL",
+      "floodScore": 86.4,
+      "waterDepthCm": 28.0,
+      "drainageCapacityPercent": 15.0,
+      "isHistoricallyFloodProne": true,
+      "polygon": [
+        [-74.0150, 40.7100],
+        [-74.0050, 40.7100],
+        [-74.0050, 40.7200],
+        [-74.0150, 40.7200],
+        [-74.0150, 40.7100]
+      ]
+    },
+    {
+      "zoneId": "zone-highland-crest-02",
+      "zoneName": "Highland Crest Ridge",
+      "severity": "NORMAL",
+      "floodScore": 12.0,
+      "waterDepthCm": 0.0,
+      "drainageCapacityPercent": 95.0,
+      "isHistoricallyFloodProne": false,
+      "polygon": [
+        [-74.0250, 40.7300],
+        [-74.0150, 40.7300],
+        [-74.0150, 40.7400],
+        [-74.0250, 40.7400],
+        [-74.0250, 40.7300]
+      ]
+    },
+    {
+      "zoneId": "zone-river-corridor-03",
+      "zoneName": "East River Concourse",
+      "severity": "WARNING",
+      "floodScore": 64.2,
+      "waterDepthCm": 14.5,
+      "drainageCapacityPercent": 40.0,
+      "isHistoricallyFloodProne": true,
+      "polygon": [
+        [-73.9950, 40.7150],
+        [-73.9850, 40.7150],
+        [-73.9850, 40.7250],
+        [-73.9950, 40.7250],
+        [-73.9950, 40.7150]
+      ]
+    },
+    {
+      "zoneId": "zone-bellandur-basin-04",
+      "zoneName": "Bellandur EcoSpace Catchment Basin",
+      "severity": "CRITICAL",
+      "floodScore": 95.0,
+      "waterDepthCm": 35.0,
+      "drainageCapacityPercent": 10.0,
+      "isHistoricallyFloodProne": true,
+      "polygon": [
+        [77.6650, 12.9150],
+        [77.6850, 12.9150],
+        [77.6850, 12.9350],
+        [77.6650, 12.9350],
+        [77.6650, 12.9150]
+      ]
+    }
+  ]
+}

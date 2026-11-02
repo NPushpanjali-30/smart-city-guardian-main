@@ -1,0 +1,40 @@
+{
+  "name": "@smartcity/desktop",
+  "version": "0.1.0",
+  "description": "Smart City Guardian Native macOS Desktop Application",
+  "author": "Smart City Guardian Team",
+  "private": true,
+  "main": "src/main.cjs",
+  "scripts": {
+    "sync": "cp -r ../web/dist ./web-dist",
+    "start": "electron .",
+    "package:mac": "npm run sync && electron-builder --mac --dir",
+    "dist:mac": "npm run sync && electron-builder --mac"
+  },
+  "build": {
+    "appId": "org.smartcity.guardian.desktop",
+    "productName": "Smart City Guardian",
+    "electronVersion": "33.4.11",
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        "dir"
+      ],
+      "darkModeSupport": true,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "web-dist/**/*"
+    ]
+  },
+  "devDependencies": {
+    "electron": "33.4.11",
+    "electron-builder": "^25.1.8"
+  }
+}

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Smart City Guardian</string>
+    <string name="title_activity_main">Smart City Guardian</string>
+    <string name="package_name">org.smartcity.guardian</string>
+    <string name="custom_url_scheme">org.smartcity.guardian</string>
+</resources>

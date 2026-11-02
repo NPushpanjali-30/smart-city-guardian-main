@@ -1,0 +1,79 @@
+{
+  "provider": "mock-traffic-service",
+  "generatedAt": "2026-09-08T09:00:00.000Z",
+  "boundingBox": [-74.0500, 40.6800, -73.9500, 40.7800],
+  "flows": [
+    {
+      "segmentId": "road-bay-st-001",
+      "roadName": "Bay Street Boulevard",
+      "currentSpeedKmh": 7.5,
+      "freeFlowSpeedKmh": 50.0,
+      "congestionScore": 85.0,
+      "delaySeconds": 680,
+      "observedAt": "2026-09-08T09:00:00.000Z"
+    },
+    {
+      "segmentId": "road-highland-ave-002",
+      "roadName": "Highland Avenue",
+      "currentSpeedKmh": 42.0,
+      "freeFlowSpeedKmh": 45.0,
+      "congestionScore": 12.0,
+      "delaySeconds": 45,
+      "observedAt": "2026-09-08T09:00:00.000Z"
+    },
+    {
+      "segmentId": "road-harbor-pkwy-003",
+      "roadName": "Harbor Parkway",
+      "currentSpeedKmh": 18.0,
+      "freeFlowSpeedKmh": 60.0,
+      "congestionScore": 70.0,
+      "delaySeconds": 420,
+      "observedAt": "2026-09-08T09:00:00.000Z"
+    },
+    {
+      "segmentId": "road-bellandur-001",
+      "roadName": "Outer Ring Road (EcoSpace Underpass)",
+      "currentSpeedKmh": 6.0,
+      "freeFlowSpeedKmh": 60.0,
+      "congestionScore": 98.0,
+      "delaySeconds": 1200,
+      "observedAt": "2026-09-08T09:00:00.000Z"
+    },
+    {
+      "segmentId": "road-hal-002",
+      "roadName": "Old Airport Road Elevated Ridge",
+      "currentSpeedKmh": 42.0,
+      "freeFlowSpeedKmh": 50.0,
+      "congestionScore": 25.0,
+      "delaySeconds": 90,
+      "observedAt": "2026-09-08T09:00:00.000Z"
+    },
+    {
+      "segmentId": "road-krpuram-003",
+      "roadName": "Old Madras Road & KR Puram Bypass",
+      "currentSpeedKmh": 35.0,
+      "freeFlowSpeedKmh": 60.0,
+      "congestionScore": 38.0,
+      "delaySeconds": 210,
+      "observedAt": "2026-09-08T09:00:00.000Z"
+    },
+    {
+      "segmentId": "road-central-arterial-004",
+      "roadName": "Hosur Road - MG Road Central Corridor",
+      "currentSpeedKmh": 38.0,
+      "freeFlowSpeedKmh": 50.0,
+      "congestionScore": 30.0,
+      "delaySeconds": 120,
+      "observedAt": "2026-09-08T09:00:00.000Z"
+    },
+    {
+      "segmentId": "road-north-arterial-005",
+      "roadName": "Bellary Road Express Highway",
+      "currentSpeedKmh": 48.0,
+      "freeFlowSpeedKmh": 60.0,
+      "congestionScore": 28.0,
+      "delaySeconds": 80,
+      "observedAt": "2026-09-08T09:00:00.000Z"
+    }
+  ]
+}

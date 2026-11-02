@@ -1,0 +1,160 @@
+{
+  "provider": "mock-road-network",
+  "evaluatedAt": "2026-09-08T09:00:00.000Z",
+  "roads": [
+    {
+      "id": "road-bay-st-001",
+      "name": "Bay Street Boulevard",
+      "roadClass": "primary",
+      "lengthMeters": 1450,
+      "speedLimitKmh": 50,
+      "floodScore": 88.0,
+      "trafficScore": 85.0,
+      "compositeRisk": 86.8,
+      "accessibilityState": "BLOCKED",
+      "confidence": 0.95,
+      "isHistoricallyFloodProne": true,
+      "coordinates": [
+        [-74.0120, 40.7120],
+        [-74.0080, 40.7150],
+        [-74.0060, 40.7220]
+      ],
+      "blockageReason": "Deep water accumulation exceeding 28cm; road closed by EOC barricade"
+    },
+    {
+      "id": "road-highland-ave-002",
+      "name": "Highland Avenue Elevated",
+      "roadClass": "primary",
+      "lengthMeters": 1820,
+      "speedLimitKmh": 50,
+      "floodScore": 10.5,
+      "trafficScore": 15.0,
+      "compositeRisk": 12.3,
+      "accessibilityState": "OPEN",
+      "confidence": 0.98,
+      "isHistoricallyFloodProne": false,
+      "coordinates": [
+        [-74.0100, 40.7320],
+        [-74.0150, 40.7280],
+        [-74.0060, 40.7220]
+      ],
+      "blockageReason": null
+    },
+    {
+      "id": "road-market-st-003",
+      "name": "Market Street",
+      "roadClass": "secondary",
+      "lengthMeters": 980,
+      "speedLimitKmh": 40,
+      "floodScore": 54.0,
+      "trafficScore": 48.0,
+      "compositeRisk": 51.6,
+      "accessibilityState": "CAUTION",
+      "confidence": 0.90,
+      "isHistoricallyFloodProne": false,
+      "coordinates": [
+        [-74.0060, 40.7220],
+        [-74.0040, 40.7170]
+      ],
+      "blockageReason": null
+    },
+    {
+      "id": "road-bellandur-001",
+      "name": "Outer Ring Road (EcoSpace Underpass)",
+      "roadClass": "primary",
+      "lengthMeters": 8500,
+      "speedLimitKmh": 60,
+      "floodScore": 95.0,
+      "trafficScore": 98.0,
+      "compositeRisk": 96.0,
+      "accessibilityState": "BLOCKED",
+      "confidence": 0.98,
+      "isHistoricallyFloodProne": true,
+      "coordinates": [
+        [77.6228, 12.9172],
+        [77.6500, 12.9200],
+        [77.6762, 12.9260],
+        [77.7011, 12.9569]
+      ],
+      "blockageReason": "Impassable: Bellandur Lake overflow water depth 35cm; BBMP barricades deployed"
+    },
+    {
+      "id": "road-hal-002",
+      "name": "Old Airport Road Elevated Ridge",
+      "roadClass": "primary",
+      "lengthMeters": 9800,
+      "speedLimitKmh": 50,
+      "floodScore": 10.0,
+      "trafficScore": 25.0,
+      "compositeRisk": 14.0,
+      "accessibilityState": "OPEN",
+      "confidence": 0.95,
+      "isHistoricallyFloodProne": false,
+      "coordinates": [
+        [77.6228, 12.9172],
+        [77.6400, 12.9350],
+        [77.6486, 12.9587],
+        [77.7011, 12.9569]
+      ],
+      "blockageReason": null
+    },
+    {
+      "id": "road-krpuram-003",
+      "name": "Old Madras Road & KR Puram Bypass",
+      "roadClass": "highway",
+      "lengthMeters": 14200,
+      "speedLimitKmh": 60,
+      "floodScore": 15.0,
+      "trafficScore": 38.0,
+      "compositeRisk": 20.0,
+      "accessibilityState": "OPEN",
+      "confidence": 0.92,
+      "isHistoricallyFloodProne": false,
+      "coordinates": [
+        [77.6228, 12.9172],
+        [77.6600, 12.9800],
+        [77.6970, 13.0012],
+        [77.7011, 12.9569]
+      ],
+      "blockageReason": null
+    },
+    {
+      "id": "road-central-arterial-004",
+      "name": "Hosur Road - MG Road Central Corridor",
+      "roadClass": "primary",
+      "lengthMeters": 7500,
+      "speedLimitKmh": 50,
+      "floodScore": 10.0,
+      "trafficScore": 30.0,
+      "compositeRisk": 14.0,
+      "accessibilityState": "OPEN",
+      "confidence": 0.95,
+      "isHistoricallyFloodProne": false,
+      "coordinates": [
+        [77.5713, 12.9767],
+        [77.5946, 12.9716],
+        [77.6228, 12.9172]
+      ],
+      "blockageReason": null
+    },
+    {
+      "id": "road-north-arterial-005",
+      "name": "Bellary Road Express Highway",
+      "roadClass": "highway",
+      "lengthMeters": 8200,
+      "speedLimitKmh": 60,
+      "floodScore": 10.0,
+      "trafficScore": 28.0,
+      "compositeRisk": 14.0,
+      "accessibilityState": "OPEN",
+      "confidence": 0.96,
+      "isHistoricallyFloodProne": false,
+      "coordinates": [
+        [77.5713, 12.9767],
+        [77.5990, 13.0048],
+        [77.6080, 13.0358]
+      ],
+      "blockageReason": null
+    }
+  ]
+}
