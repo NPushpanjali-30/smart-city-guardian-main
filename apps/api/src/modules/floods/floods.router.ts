@@ -384,3 +384,31 @@ floodsRouter.post('/simulate', async (req: Request, res: Response) => {
     });
   }
 });
+
+/**
+ * POST /api/v1/floods/route-corridor
+ * Evaluates real flood and weather risk along any Indian route corridor
+ * using Open-Meteo GloFAS river discharge and Open-Meteo Forecast APIs.
+ */
+floodsRouter.post('/route-corridor', async (req: Request, res: Response) => {
+  try {
+    const { waypoints, simulatedRainfall, scenarioName } = req.body;
+    const { routeFloodRiskService } = await import('../../services/flood/routeFloodRisk.service.js');
+
+    const result = await routeFloodRiskService.evaluateRouteCorridor(waypoints || [], {
+      simulatedRainfall: typeof simulatedRainfall === 'number' ? simulatedRainfall : undefined,
+      scenarioName: scenarioName || undefined,
+    });
+
+    res.status(200).json(result);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'ROUTE_FLOOD_EVALUATION_ERROR',
+        message: `Failed to evaluate route corridor flood risks: ${msg}`,
+      },
+    });
+  }
+});

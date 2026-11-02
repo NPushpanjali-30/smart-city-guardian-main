@@ -16,6 +16,7 @@ import {
 } from '../../services/notifications/notificationPolicy.service.js';
 import { notificationQueueService } from '../../services/notifications/notificationQueue.service.js';
 import { mockSmsProvider, MockSmsSimulationMode } from '../../providers/sms/mockSmsProvider.js';
+import { TextBeeSmsAdapter } from '../../providers/sms/textBeeSmsAdapter.js';
 import { requireAuth, requireRole } from '../../middleware/auth.js';
 
 export const alertsRouter = Router();
@@ -39,10 +40,26 @@ const SendSmsSimulationSchema = z.object({
 export const handleSendSmsDispatch = async (req: Request, res: Response) => {
   try {
     const data = SendSmsSimulationSchema.parse(req.body);
-    const rawPhone = data.phoneNumber || data.to || '9876543210';
+    const rawPhone = data.phoneNumber || data.to;
+    if (!rawPhone) {
+      return res.status(400).json({
+        status: 'error',
+        success: false,
+        error: 'Valid recipient phone number is required (+91 followed by 10 digits starting with 6-9)',
+        message: 'Valid recipient phone number is required (+91 followed by 10 digits starting with 6-9)',
+      });
+    }
+    const normalizedPhone = userPreferenceService.normalizePhoneNumber(rawPhone);
+    if (!userPreferenceService.validatePhoneNumber(normalizedPhone)) {
+      return res.status(400).json({
+        status: 'error',
+        success: false,
+        error: 'Valid recipient phone number is required (+91 followed by 10 digits starting with 6-9)',
+        message: 'Valid recipient phone number is required (+91 followed by 10 digits starting with 6-9)',
+      });
+    }
     const zoneName = data.zone || data.location || 'Local Sector';
     const severity = (data.severity || 'CRITICAL') as 'WATCH' | 'WARNING' | 'CRITICAL';
-    const normalizedPhone = userPreferenceService.normalizePhoneNumber(rawPhone);
     const maskedPhone = userPreferenceService.maskPhoneNumber(normalizedPhone);
 
     const active = notificationQueueService.getActiveProvider();
@@ -57,13 +74,30 @@ export const handleSendSmsDispatch = async (req: Request, res: Response) => {
       priority: (data.priority as any) || 'HIGH',
     });
 
+    if (!smsResult.success) {
+      return res.status(400).json({
+        status: 'error',
+        success: false,
+        error: smsResult.error || 'Failed to dispatch SMS through gateway',
+        message: smsResult.error || 'Failed to dispatch SMS through gateway',
+        dispatch: {
+          provider: active.name,
+          recipientPhone: normalizedPhone,
+          status: 'FAILED',
+          error: smsResult.error,
+        },
+      });
+    }
+
+    const assignedId = smsResult.messageId || `SM_sim_${Date.now()}`;
     res.status(200).json({
       status: 'ok',
-      success: smsResult.success,
-      message: 'Emergency SMS simulated successfully',
+      success: true,
+      messageId: assignedId,
+      message: smsResult.provider.includes('test-mode') ? 'SMS sent in safe test mode' : 'SMS sent successfully',
       dispatch: {
         provider: active.name,
-        messageId: smsResult.messageId || `SM_sim_${Date.now()}`,
+        messageId: assignedId,
         recipientMasked: maskedPhone,
         recipientPhone: normalizedPhone,
         severity,
@@ -80,6 +114,7 @@ export const handleSendSmsDispatch = async (req: Request, res: Response) => {
     res.status(400).json({
       status: 'error',
       success: false,
+      error: err.message || 'Invalid SMS dispatch parameters',
       message: err.message || 'Invalid SMS dispatch parameters',
     });
   }
@@ -378,6 +413,35 @@ alertsRouter.post('/provider/configure', requireRole('ADMIN'), (req: Request, re
     isLive: provider.isLive,
     isAvailable: provider.isAvailable(),
   });
+});
+
+/**
+ * GET & POST /api/v1/alerts/sms/test-connection
+ * Tests TextBee Gateway connection, API key authentication, and device online status.
+ */
+alertsRouter.all('/sms/test-connection', async (req: Request, res: Response) => {
+  try {
+    const active = notificationQueueService.getActiveProvider();
+    let result;
+    if (active instanceof TextBeeSmsAdapter || 'testConnection' in active) {
+      result = await (active as any).testConnection();
+    } else {
+      const tb = new TextBeeSmsAdapter();
+      result = await tb.testConnection();
+    }
+
+    res.status(200).json({
+      status: result.status,
+      success: true,
+      ...result,
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      status: 'error',
+      success: false,
+      message: err.message || 'Error testing SMS gateway connection',
+    });
+  }
 });
 
 /**

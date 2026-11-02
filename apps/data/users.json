@@ -1,0 +1,79 @@
+[
+  {
+    "id": "user-001",
+    "email": "citizen@smartcity.org",
+    "fullName": "Metro Resident",
+    "phoneNumber": "+919876543210",
+    "role": "CITIZEN",
+    "smsEnabled": true,
+    "minSeverityThreshold": "WARNING",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "admin-001",
+    "email": "admin@smartcity.org",
+    "fullName": "EOC Commander",
+    "phoneNumber": "+919876543210",
+    "role": "ADMIN",
+    "smsEnabled": true,
+    "minSeverityThreshold": "WARNING",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "user-mvz2zq12-7sl5",
+    "email": "admin.eoc@smartcity.org",
+    "fullName": "EOC Commander",
+    "phoneNumber": "+919876543210",
+    "role": "ADMIN",
+    "smsEnabled": true,
+    "minSeverityThreshold": "WARNING",
+    "createdAt": "2026-11-02T09:53:24.614Z",
+    "updatedAt": "2026-11-02T09:53:24.614Z"
+  },
+  {
+    "id": "user-mvz35u3a-tzk4",
+    "email": "test.driver.1793613469835@smartcity.org",
+    "fullName": "Metro Resident",
+    "phoneNumber": "+919845012345",
+    "role": "CITIZEN",
+    "smsEnabled": true,
+    "minSeverityThreshold": "WARNING",
+    "createdAt": "2026-11-02T09:58:09.814Z",
+    "updatedAt": "2026-11-02T09:58:09.830Z"
+  },
+  {
+    "id": "user-mvz3c7mv-y47j",
+    "email": "test.driver.1793613766380@smartcity.org",
+    "fullName": "Rohan Sharma",
+    "phoneNumber": "+919845012345",
+    "role": "CITIZEN",
+    "smsEnabled": true,
+    "minSeverityThreshold": "WARNING",
+    "createdAt": "2026-11-02T10:03:07.303Z",
+    "updatedAt": "2026-11-02T10:03:07.353Z"
+  },
+  {
+    "id": "user-mvz3dxsw-6itm",
+    "email": "test.driver.1793613847888@smartcity.org",
+    "fullName": "Rohan Sharma",
+    "phoneNumber": "+919845012345",
+    "role": "CITIZEN",
+    "smsEnabled": true,
+    "minSeverityThreshold": "WARNING",
+    "createdAt": "2026-11-02T10:04:27.872Z",
+    "updatedAt": "2026-11-02T10:04:27.906Z"
+  },
+  {
+    "id": "user-mvz3er8f-odyy",
+    "email": "test.driver.1793613886122@smartcity.org",
+    "fullName": "Rohan Sharma",
+    "phoneNumber": "+919845012345",
+    "role": "CITIZEN",
+    "smsEnabled": true,
+    "minSeverityThreshold": "WARNING",
+    "createdAt": "2026-11-02T10:05:06.015Z",
+    "updatedAt": "2026-11-02T10:05:06.057Z"
+  }
+]

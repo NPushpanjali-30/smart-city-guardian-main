@@ -201,23 +201,40 @@ export const ProfilePage: React.FC = () => {
     setSavedSuccess(false);
 
     const cleanPhone = phoneNumber.trim();
-    const digitsOnly = cleanPhone.replace(/\D/g, '');
-    if (!cleanPhone || digitsOnly.length < 8) {
-      setErrorMessage('Please enter a valid mobile number with country code (e.g. +91 9876543210).');
+    const digitsOnly = extract10Digits(cleanPhone);
+    if (!cleanPhone || digitsOnly.length !== 10) {
+      setErrorMessage('Please enter a valid 10-digit Indian mobile number (e.g. 9876543210).');
+      setIsLoading(false);
+      return;
+    }
+    if (!/^[6-9]/.test(digitsOnly)) {
+      setErrorMessage('Indian mobile number must begin with digits 6, 7, 8, or 9.');
       setIsLoading(false);
       return;
     }
 
-    let calculatedMasked = maskPhone(cleanPhone);
+    const formattedE164 = `+91${digitsOnly}`;
+    let calculatedMasked = maskPhone(formattedE164);
 
     // 1. Attempt authoritative backend sync if available
     try {
+      await fetch('/api/v1/auth/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: citizenName,
+          phoneNumber: formattedE164,
+          email: citizenEmail,
+          smsConsent: smsOptIn,
+        }),
+      });
+
       const res = await fetch('/api/v1/alerts/preferences', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: 'demo-user-1',
-          phoneNumber: cleanPhone,
+          phoneNumber: formattedE164,
           smsOptIn,
           preferredLanguage,
           minSeverity,
@@ -241,7 +258,7 @@ export const ProfilePage: React.FC = () => {
     }
 
     // 2. Persist to state and browser localStorage for zero-failure demo continuity
-    setPhoneNumber(cleanPhone);
+    setPhoneNumber(formattedE164);
     setPhoneNumberMasked(calculatedMasked);
 
     try {
@@ -302,6 +319,25 @@ export const ProfilePage: React.FC = () => {
           fontSize: '0.88rem',
         }}>
           ⚠ {errorMessage}
+        </div>
+      )}
+
+      {(!phoneNumber || extract10Digits(phoneNumber).length < 10) && (
+        <div style={{
+          padding: '14px 18px',
+          borderRadius: '8px',
+          background: 'rgba(245, 158, 11, 0.15)',
+          border: '1px solid rgba(245, 158, 11, 0.5)',
+          color: '#fde68a',
+          fontSize: '0.88rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+        }}>
+          <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+          <span>
+            <strong>Action Required:</strong> Please enter and save your 10-digit Indian mobile number (+91) below to receive critical flood advisories and SMS evacuation alerts.
+          </span>
         </div>
       )}
 

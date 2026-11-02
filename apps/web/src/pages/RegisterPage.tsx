@@ -25,38 +25,107 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate, onRoleCh
   const [password, setPassword] = useState('');
   const [smsConsent, setSmsConsent] = useState(true);
   const [severityThreshold, setSeverityThreshold] = useState('WARNING');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
+
+    const digits = extract10Digits(phoneNumber);
+    if (digits.length !== 10) {
+      setErrorMessage('Please enter a valid 10-digit Indian mobile number.');
+      return;
+    }
+    if (!/^[6-9]/.test(digits)) {
+      setErrorMessage('Indian mobile number must begin with digits 6, 7, 8, or 9.');
+      return;
+    }
+
+    const cleanPhone = `+91${digits}`;
+    setIsSubmitting(true);
+
     try {
-      const cleanPhone = phoneNumber.trim();
+      const res = await fetch('/api/v1/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: fullName.trim(),
+          email: email.trim(),
+          phoneNumber: cleanPhone,
+          password,
+          smsConsent,
+          minSeverityThreshold: severityThreshold,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const profile = {
+          id: data.user?.id || 'user-001',
+          name: data.user?.fullName || fullName.trim(),
+          email: data.user?.email || email.trim(),
+          phoneNumber: data.user?.phoneNumber || cleanPhone,
+          phoneNumberMasked: `${cleanPhone.slice(0, 5)}*** ***${cleanPhone.slice(-2)}`,
+          smsOptIn: smsConsent,
+          minSeverity: severityThreshold,
+          role: data.user?.role || 'CITIZEN',
+        };
+        localStorage.setItem('smartcity_token', data.accessToken || '');
+        localStorage.setItem('smartcity_user_profile', JSON.stringify(profile));
+        localStorage.setItem('smartcity_profile_phone', profile.phoneNumber);
+        window.dispatchEvent(new CustomEvent('smartcity_profile_updated', { detail: profile }));
+        onRoleChange('CITIZEN');
+        onNavigate('/dashboard');
+        return;
+      } else {
+        const errData = await res.json().catch(() => null);
+        setErrorMessage(errData?.message || 'Registration failed. Please check details.');
+      }
+    } catch {
+      // Local fallback in offline mode
       const profile = {
-        name: fullName.trim() || 'Maya Chen',
-        email: email.trim() || 'maya.chen@metro.org',
+        name: fullName.trim() || 'Metro Resident',
+        email: email.trim(),
         phoneNumber: cleanPhone,
-        phoneNumberMasked: cleanPhone.length > 5 ? `${cleanPhone.slice(0, 4)}*** ***${cleanPhone.slice(-2)}` : cleanPhone,
+        phoneNumberMasked: `${cleanPhone.slice(0, 5)}*** ***${cleanPhone.slice(-2)}`,
         smsOptIn: smsConsent,
         minSeverity: severityThreshold,
+        role: 'CITIZEN' as const,
       };
       localStorage.setItem('smartcity_user_profile', JSON.stringify(profile));
-      if (cleanPhone) {
-        localStorage.setItem('smartcity_profile_phone', cleanPhone);
-      }
+      localStorage.setItem('smartcity_profile_phone', cleanPhone);
       window.dispatchEvent(new CustomEvent('smartcity_profile_updated', { detail: profile }));
-    } catch {}
-    onRoleChange('CITIZEN');
-    onNavigate('/dashboard');
+      onRoleChange('CITIZEN');
+      onNavigate('/dashboard');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="container" style={{ maxWidth: '540px', marginTop: '30px' }}>
       <div className="glass-panel" style={{ padding: '36px' }}>
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <h2 style={{ fontSize: '1.6rem', fontWeight: 800 }}>Citizen Registration</h2>
+          <h2 style={{ fontSize: '1.6rem', fontWeight: 800 }}>Create Citizen Profile</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginTop: '6px' }}>
             Register to receive safety-weighted routing and emergency SMS flood advisories.
           </p>
         </div>
+
+        {errorMessage && (
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.15)',
+            border: '1px solid #ef4444',
+            color: '#fca5a5',
+            padding: '10px 14px',
+            borderRadius: '8px',
+            fontSize: '0.85rem',
+            marginBottom: '16px'
+          }}>
+            {errorMessage}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
           <div>
@@ -67,7 +136,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate, onRoleCh
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder="e.g. Maya Chen"
+              placeholder="e.g. Rahul Sharma"
               style={{
                 width: '100%',
                 padding: '10px 14px',
@@ -88,7 +157,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate, onRoleCh
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="maya.chen@metro.org"
+              placeholder="rahul.sharma@example.com"
               style={{
                 width: '100%',
                 padding: '10px 14px',
@@ -103,7 +172,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate, onRoleCh
 
           <div>
             <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}>
-              Mobile Phone (India 🇮🇳 +91 Fixed)
+              Mobile Phone (India 🇮🇳 +91 Fixed) <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <div style={{ display: 'flex', alignItems: 'stretch' }}>
               <div style={{
@@ -148,7 +217,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate, onRoleCh
               />
             </div>
             <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-              Locked to +91. Enter your 10-digit number ({extract10Digits(phoneNumber).length}/10 digits).
+              Required for emergency SMS broadcasts ({extract10Digits(phoneNumber).length}/10 digits, starts with 6-9).
             </span>
           </div>
 
@@ -212,8 +281,13 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate, onRoleCh
             </div>
           </div>
 
-          <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px' }}>
-            Complete Registration &amp; Enter Dashboard
+          <button
+            type="submit"
+            className="btn btn-primary"
+            style={{ width: '100%', padding: '12px' }}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Registering...' : 'Complete Registration & Enter Dashboard'}
           </button>
         </form>
 

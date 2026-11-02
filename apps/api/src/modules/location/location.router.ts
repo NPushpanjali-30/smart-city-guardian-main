@@ -327,6 +327,17 @@ const BENGALURU_DATABASE = [
   { lat: 23.0225, lon: 72.5714, name: 'Ahmedabad (Sabarmati Riverfront & Ashram)', area: 'Gujarat' },
 ];
 
+let lastNominatimRequestTime = 0;
+
+async function throttleNominatim(): Promise<void> {
+  const now = Date.now();
+  const elapsed = now - lastNominatimRequestTime;
+  if (elapsed < 1000) {
+    await new Promise((resolve) => setTimeout(resolve, 1000 - elapsed));
+  }
+  lastNominatimRequestTime = Date.now();
+}
+
 /**
  * GET /api/v1/location/search?q=...
  * Real-time geocoding search for ANY point across India
@@ -352,8 +363,9 @@ locationRouter.get('/search', async (req: Request, res: Response) => {
 
   // 2. Real-time Nominatim lookup across India
   try {
+    await throttleNominatim();
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2500);
+    const timeout = setTimeout(() => controller.abort(), 3500);
 
     const isBangaloreSpecific = qLower.includes('bangalore') || qLower.includes('bengaluru');
     const nominatimUrl = isBangaloreSpecific
@@ -361,7 +373,10 @@ locationRouter.get('/search', async (req: Request, res: Response) => {
       : `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&countrycodes=in`;
 
     const osmResp = await fetch(nominatimUrl, {
-      headers: { 'User-Agent': 'SmartCityGuardian/2.1 (contact@smartcity-guardian.gov.in)' },
+      headers: {
+        'User-Agent': 'SmartCityGuardian/2.1 (contact@smartcity.org)',
+        'Referer': 'https://smartcity-guardian.org',
+      },
       signal: controller.signal,
     });
     clearTimeout(timeout);
@@ -421,12 +436,16 @@ locationRouter.get('/reverse', async (req: Request, res: Response) => {
   }
 
   try {
+    await throttleNominatim();
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
+    const timeout = setTimeout(() => controller.abort(), 2500);
 
     const revUrl = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`;
     const osmResp = await fetch(revUrl, {
-      headers: { 'User-Agent': 'SmartCityGuardian/2.1 (contact@smartcity-guardian.gov.in)' },
+      headers: {
+        'User-Agent': 'SmartCityGuardian/2.1 (contact@smartcity.org)',
+        'Referer': 'https://smartcity-guardian.org',
+      },
       signal: controller.signal,
     });
     clearTimeout(timeout);

@@ -15,18 +15,25 @@ export interface TextBeeConfig {
   testMode?: boolean;
 }
 
+export interface TextBeeConnectionTestResult {
+  success: boolean;
+  status: 'CONNECTED' | 'DEVICE_OFFLINE' | 'INVALID_KEY' | 'MISSING_CREDENTIALS' | 'TEST_MODE' | 'ERROR';
+  message: string;
+  details?: any;
+}
+
 /**
  * TextBee SMS Gateway Adapter
  * Integrates TextBee Android Gateway (https://api.textbee.dev) for real-time
  * cellular SMS emergency broadcasts across Indian mobile networks.
  *
- * Fully supports:
- * - Direct REST API integration (POST /api/v1/gateway/send-sms)
- * - Secure API key authentication via x-api-key header
- * - E.164 phone normalization for Indian (+91) and international numbers
- * - GSM-7 and UCS-2 Unicode message segmentation analysis
- * - Safe test / dry-run mode (prevents unauthorized live SMS charges during testing)
- * - Circuit breaker protection and delivery status tracking
+ * Implements:
+ * - TextBee REST API: POST /api/v1/gateway/devices/{deviceId}/send-sms
+ * - Header: x-api-key
+ * - Backend environment variables: TEXTBEE_API_KEY, TEXTBEE_DEVICE_ID, TEXTBEE_BASE_URL
+ * - E.164 phone normalization (+91 for Indian mobile numbers)
+ * - Connection and device status testing
+ * - Safe test / dry-run mode
  */
 export class TextBeeSmsAdapter implements ISmsProvider {
   public readonly name = 'textbee-adapter';
@@ -39,15 +46,16 @@ export class TextBeeSmsAdapter implements ISmsProvider {
   private circuitBreaker: CircuitBreaker;
   private messageStore: Map<string, { status: SmsDeliveryStatus; details: any }> = new Map();
 
-  constructor(config?: TextBeeConfig | string) {
+  constructor(config?: TextBeeConfig | string, deviceIdParam?: string, testModeParam?: boolean) {
     if (typeof config === 'string') {
       this.apiKey = config;
-      this.baseUrl = 'https://api.textbee.dev/api/v1';
-      this.testMode = process.env.TEXTBEE_TEST_MODE !== 'false';
+      this.deviceId = deviceIdParam || process.env.TEXTBEE_DEVICE_ID;
+      this.baseUrl = (process.env.TEXTBEE_BASE_URL || 'https://api.textbee.dev/api/v1').replace(/\/$/, '');
+      this.testMode = testModeParam !== undefined ? testModeParam : (process.env.TEXTBEE_TEST_MODE !== 'false');
     } else {
       this.apiKey = config?.apiKey || process.env.TEXTBEE_API_KEY;
       this.deviceId = config?.deviceId || process.env.TEXTBEE_DEVICE_ID;
-      this.baseUrl = config?.baseUrl || process.env.TEXTBEE_BASE_URL || 'https://api.textbee.dev/api/v1';
+      this.baseUrl = (config?.baseUrl || process.env.TEXTBEE_BASE_URL || 'https://api.textbee.dev/api/v1').replace(/\/$/, '');
       this.testMode = config?.testMode !== undefined
         ? config.testMode
         : (process.env.TEXTBEE_TEST_MODE !== 'false');
@@ -58,7 +66,7 @@ export class TextBeeSmsAdapter implements ISmsProvider {
     this.circuitBreaker = new CircuitBreaker('TextBeeGateway', {
       failureThreshold: 3,
       resetTimeoutMs: 30000,
-      requestTimeoutMs: 8000,
+      requestTimeoutMs: 10000,
       maxRetries: 2,
     });
   }
@@ -80,13 +88,9 @@ export class TextBeeSmsAdapter implements ISmsProvider {
   }
 
   public isAvailable(): boolean {
-    // Available if API key exists or running in safe test mode
     return Boolean(this.apiKey || this.testMode);
   }
 
-  /**
-   * Normalizes recipient numbers to E.164 (+91 for Indian mobile numbers)
-   */
   public normalizeRecipient(phone: string): string {
     const raw = phone.trim();
     if (raw.startsWith('+')) {
@@ -107,6 +111,118 @@ export class TextBeeSmsAdapter implements ISmsProvider {
   }
 
   /**
+   * Tests TextBee Gateway connection and checks whether device is online or credentials missing.
+   */
+  public async testConnection(): Promise<TextBeeConnectionTestResult> {
+    const effectiveApiKey = this.apiKey || process.env.TEXTBEE_API_KEY;
+    const effectiveDeviceId = this.deviceId || process.env.TEXTBEE_DEVICE_ID;
+
+    if (!effectiveApiKey) {
+      return {
+        success: false,
+        status: 'MISSING_CREDENTIALS',
+        message: 'TextBee API key is missing. Set TEXTBEE_API_KEY in backend environment.',
+      };
+    }
+
+    if (!effectiveDeviceId) {
+      return {
+        success: false,
+        status: 'MISSING_CREDENTIALS',
+        message: 'TextBee Device ID is missing. Set TEXTBEE_DEVICE_ID in backend environment.',
+      };
+    }
+
+    if (this.testMode) {
+      return {
+        success: true,
+        status: 'TEST_MODE',
+        message: 'TextBee Gateway configured in Safe Test Mode (Simulated SMS ready).',
+        details: { deviceId: effectiveDeviceId, testMode: true },
+      };
+    }
+
+    try {
+      const endpoint = `${this.baseUrl}/gateway/devices/${encodeURIComponent(effectiveDeviceId)}`;
+      const res = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          'x-api-key': effectiveApiKey,
+          Accept: 'application/json',
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+
+      const raw = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        data = { raw };
+      }
+
+      if (res.status === 401 || res.status === 403) {
+        return {
+          success: false,
+          status: 'INVALID_KEY',
+          message: 'Invalid TextBee API key. Check TEXTBEE_API_KEY in backend environment.',
+          details: data,
+        };
+      }
+
+      if (res.status === 404) {
+        return {
+          success: false,
+          status: 'DEVICE_OFFLINE',
+          message: `TextBee device '${effectiveDeviceId}' not found. Check TEXTBEE_DEVICE_ID.`,
+          details: data,
+        };
+      }
+
+      if (res.status === 429) {
+        return {
+          success: false,
+          status: 'ERROR',
+          message: 'TextBee rate limit exceeded. Please wait a moment before trying again.',
+          details: data,
+        };
+      }
+
+      if (!res.ok) {
+        return {
+          success: false,
+          status: 'ERROR',
+          message: data.message || `TextBee gateway error: HTTP ${res.status}`,
+          details: data,
+        };
+      }
+
+      const isOnline = data?.data?.status === 'ONLINE' || data?.status === 'ONLINE' || data?.online === true;
+      if (data?.data?.status && !isOnline) {
+        return {
+          success: false,
+          status: 'DEVICE_OFFLINE',
+          message: `TextBee Android device is currently OFFLINE (Status: ${data.data.status}). Open TextBee app on Android device.`,
+          details: data,
+        };
+      }
+
+      return {
+        success: true,
+        status: 'CONNECTED',
+        message: `TextBee Gateway connected successfully. Device '${effectiveDeviceId}' is active.`,
+        details: data,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        status: 'ERROR',
+        message: `Failed to reach TextBee Gateway: ${err.message || 'Network timeout'}`,
+      };
+    }
+  }
+
+  /**
    * Dispatches disaster SMS via TextBee Gateway
    */
   public async sendSms(params: SmsSendParams): Promise<SmsDeliveryResult> {
@@ -114,9 +230,8 @@ export class TextBeeSmsAdapter implements ISmsProvider {
     const sentAt = new Date().toISOString();
     const recipientE164 = this.normalizeRecipient(params.to);
 
-    // Validate phone number format (E.164: + followed by 10-15 digits)
     if (!/^\+[1-9]\d{9,14}$/.test(recipientE164)) {
-      const errorMsg = `INVALID_PHONE_NUMBER: Recipient '${params.to}' must resolve to a valid phone number (E.164 format)`;
+      const errorMsg = `INVALID_PHONE_NUMBER: Recipient '${params.to}' must resolve to a valid phone number (E.164 format, e.g. +91XXXXXXXXXX)`;
       logger.warn(`[TextBeeSmsAdapter] ${errorMsg}`);
       return {
         success: false,
@@ -131,6 +246,7 @@ export class TextBeeSmsAdapter implements ISmsProvider {
     }
 
     const effectiveApiKey = this.apiKey || process.env.TEXTBEE_API_KEY;
+    const effectiveDeviceId = this.deviceId || process.env.TEXTBEE_DEVICE_ID;
 
     // Check if running in safe test / authorization mode
     if (this.testMode || !effectiveApiKey) {
@@ -169,12 +285,12 @@ export class TextBeeSmsAdapter implements ISmsProvider {
           message: params.message,
         };
 
-        const effectiveDeviceId = this.deviceId || process.env.TEXTBEE_DEVICE_ID;
+        // TextBee endpoint: POST /api/v1/gateway/devices/{deviceId}/send-sms
+        let endpoint = `${this.baseUrl}/gateway/send-sms`;
         if (effectiveDeviceId) {
-          payload.deviceId = effectiveDeviceId;
+          endpoint = `${this.baseUrl}/gateway/devices/${encodeURIComponent(effectiveDeviceId)}/send-sms`;
         }
 
-        const endpoint = `${this.baseUrl}/gateway/send-sms`;
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: {
@@ -194,8 +310,23 @@ export class TextBeeSmsAdapter implements ISmsProvider {
         }
 
         if (!res.ok) {
-          const errMsg = parsedData.message || parsedData.error || `HTTP ${res.status}: ${res.statusText}`;
-          logger.error(`[TextBeeSmsAdapter] TextBee API error: ${errMsg}`);
+          let errorType = 'TEXTBEE_API_ERROR';
+          let userMsg = parsedData.message || parsedData.error || `HTTP ${res.status}`;
+          if (res.status === 401 || res.status === 403) {
+            errorType = 'INVALID_API_KEY';
+            userMsg = 'Invalid or expired TextBee API key.';
+          } else if (res.status === 404) {
+            errorType = 'DEVICE_NOT_FOUND';
+            userMsg = `TextBee device '${effectiveDeviceId || 'unknown'}' not found.`;
+          } else if (res.status === 429) {
+            errorType = 'RATE_LIMIT_EXCEEDED';
+            userMsg = 'TextBee rate limit reached. Please wait before retrying.';
+          } else if (parsedData.message && parsedData.message.toLowerCase().includes('offline')) {
+            errorType = 'DEVICE_OFFLINE';
+            userMsg = 'TextBee Android device is offline.';
+          }
+
+          logger.error(`[TextBeeSmsAdapter] ${errorType}: ${userMsg}`);
           return {
             success: false,
             messageId: '',
@@ -203,7 +334,7 @@ export class TextBeeSmsAdapter implements ISmsProvider {
             provider: this.name,
             segmentCount: analysis.segmentCount,
             encoding: analysis.encoding,
-            error: `TEXTBEE_API_ERROR: ${errMsg}`,
+            error: `${errorType}: ${userMsg}`,
             sentAt,
           };
         }
@@ -251,9 +382,6 @@ export class TextBeeSmsAdapter implements ISmsProvider {
     }
   }
 
-  /**
-   * Checks delivery status of a sent message
-   */
   public async getDeliveryStatus(messageId: string): Promise<SmsDeliveryStatus> {
     const record = this.messageStore.get(messageId);
     if (record) {

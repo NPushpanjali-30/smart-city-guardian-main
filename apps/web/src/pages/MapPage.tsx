@@ -35,6 +35,8 @@ interface EmergencyFacility {
   phone?: string;
   capacity?: number;
   city?: string;
+  openingHours?: string;
+  emergency?: string;
 }
 
 export interface LocationPoint {
@@ -459,27 +461,41 @@ export const MapPage: React.FC<MapPageProps> = ({ onNavigate: _onNavigate }) => 
   ];
 
   const [facilities, setFacilities] = useState<EmergencyFacility[]>(DEFAULT_EMERGENCY_FACILITIES);
+  const [facilityNotice, setFacilityNotice] = useState<string | null>(null);
+  const [routeFloodSegments, setRouteFloodSegments] = useState<any[]>([]);
+  const [hasUnavailableFlood, setHasUnavailableFlood] = useState<boolean>(false);
+
+  // Global handler for "Navigate here" button in facility popups
+  useEffect(() => {
+    (window as any).__navigateToFacility = (lat: number, lon: number, name: string) => {
+      const newDest: LocationPoint = { lat, lon, name };
+      setDestinationPoint(newDest);
+      destinationPointRef.current = newDest;
+      setDestinationInput(name);
+      triggerRouteCalculation(originPointRef.current, newDest);
+    };
+    return () => {
+      delete (window as any).__navigateToFacility;
+    };
+  }, []);
 
   // Dynamically update facilities whenever destination changes or active category filter changes
   useEffect(() => {
     let isCancelled = false;
     const typeParam = activeCategory === 'HOSPITAL' ? '&type=HOSPITAL' : activeCategory === 'SHELTER' ? '&type=SHELTER' : '';
 
-    fetch(`/api/v1/facilities/nearby?lat=${destinationPoint.lat}&lon=${destinationPoint.lon}&radius=25${typeParam}`)
+    fetch(`/api/v1/facilities/nearby?lat=${destinationPoint.lat}&lon=${destinationPoint.lon}&radius=4${typeParam}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((facData) => {
         if (isCancelled) return;
         const facList = facData?.data || facData?.facilities || [];
-        if (Array.isArray(facList) && facList.length > 0) {
-          setFacilities((prev) => {
-            const merged = [...facList];
-            prev.forEach((p) => {
-              if (!merged.some((m) => m.id === p.id || m.name === p.name)) {
-                merged.push(p);
-              }
-            });
-            return merged;
-          });
+        if (Array.isArray(facList)) {
+          setFacilities(facList);
+          if (facList.length === 0) {
+            setFacilityNotice('No facilities found in OpenStreetMap near this destination');
+          } else {
+            setFacilityNotice(null);
+          }
         }
       })
       .catch(() => {});
@@ -1015,36 +1031,51 @@ export const MapPage: React.FC<MapPageProps> = ({ onNavigate: _onNavigate }) => 
       setNavSteps(activeSteps);
       setCurrentStepIdx(0);
 
-      // Automatically update flood zones along the entire selected route (RED: High, ORANGE: Medium, YELLOW: Low)
+      // Evaluate historical catchment flood zones along this route corridor
       const corridorFlood = getFloodZonesAlongRoute(chosenBest.waypoints, 30, activeForecastRainfall);
-      setActiveFloodZones(corridorFlood.zones);
-      setLayerHistorical(true);
+      if (corridorFlood?.zones?.length) {
+        setActiveFloodZones(corridorFlood.zones);
+      }
 
-      // Automatically query real OSM hospitals and emergency shelters along the entire selected route
-      fetch('/api/v1/facilities/corridor', {
+      // Query real India-wide flood risk along the entire route from Open-Meteo GloFAS & Forecast APIs
+      fetch('/api/v1/floods/route-corridor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ waypoints: chosenBest.waypoints, radiusKm: 25 }),
+        body: JSON.stringify({
+          waypoints: chosenBest.waypoints,
+          simulatedRainfall: isWeatherPanelOpen || activeForecastRainfall > 25 ? activeForecastRainfall : undefined,
+        }),
       })
         .then((r) => (r.ok ? r.json() : null))
-        .then((facData) => {
-          const facList = facData?.data || facData?.facilities || [];
-          if (Array.isArray(facList) && facList.length > 0) {
-            setFacilities((prev) => {
-              const merged = [...facList];
-              prev.forEach((p) => {
-                if (!merged.some((m) => m.id === p.id || m.name === p.name)) {
-                  merged.push(p);
-                }
-              });
-              return merged;
-            });
+        .then((fData) => {
+          if (fData?.success && Array.isArray(fData.segments)) {
+            setRouteFloodSegments(fData.segments);
+            setHasUnavailableFlood(Boolean(fData.hasUnavailableSegments));
           }
         })
         .catch(() => {});
 
+      // Query real OSM facilities strictly around destination (3-5 km)
+      fetch(`/api/v1/facilities/nearby?lat=${end.lat}&lon=${end.lon}&radius=4`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((facData) => {
+          const facList = facData?.data || facData?.facilities || [];
+          if (Array.isArray(facList)) {
+            setFacilities(facList);
+            if (facList.length === 0) {
+              setFacilityNotice('No facilities found in OpenStreetMap near this destination');
+            } else {
+              setFacilityNotice(null);
+            }
+          }
+        })
+        .catch(() => {});
+
+      // After route search: Zoom to street level (zoom 15) around the destination
       setTimeout(() => {
-        fitRouteBounds(chosenBest.waypoints);
+        if (mapInstanceRef.current && end) {
+          mapInstanceRef.current.setView([end.lat, end.lon], 15, { animate: true });
+        }
       }, 100);
 
       // Background telemetry sync with backend API if available
@@ -1630,7 +1661,7 @@ export const MapPage: React.FC<MapPageProps> = ({ onNavigate: _onNavigate }) => 
         zoom: 13,
         zoomControl: false, // Customized position in bottom-right so it never collides with search card
         dragging: true, // Mouse dragging to pan the map
-        scrollWheelZoom: true,
+        scrollWheelZoom: false, // Disabled initially until mouse enters canvas
         wheelDebounceTime: 40,
         wheelPxPerZoomLevel: 60,
       });
@@ -1643,6 +1674,7 @@ export const MapPage: React.FC<MapPageProps> = ({ onNavigate: _onNavigate }) => 
       const onMapMouseLeave = () => map.scrollWheelZoom.disable();
       mapContainerEl.addEventListener('mouseenter', onMapMouseEnter);
       mapContainerEl.addEventListener('mouseleave', onMapMouseLeave);
+      mapContainerEl.addEventListener('click', onMapMouseEnter);
 
       // Prevent overlay cards (search card, weather panel, nav hud) from triggering accidental map zoom
       const overlaySelectors = [
@@ -2008,6 +2040,56 @@ export const MapPage: React.FC<MapPageProps> = ({ onNavigate: _onNavigate }) => 
       group.addLayer(obsPoly);
     }
 
+    // 4b. India-Wide Route Corridor Flood Overlays (from real Open-Meteo GloFAS & Forecast APIs)
+    if (layerHistorical && routeFloodSegments.length > 0) {
+      routeFloodSegments.forEach((seg) => {
+        if (seg.isUnavailable) {
+          const unavailMarker = L.circleMarker(seg.coordinates, {
+            radius: 8,
+            color: '#64748B',
+            fillColor: '#94A3B8',
+            fillOpacity: 0.7,
+            weight: 2,
+          });
+          unavailMarker.bindPopup(`
+            <div style="font-family: inherit; font-size: 12px; color: #0F172A; min-width: 220px; padding: 2px;">
+              <strong style="color: #64748B;">ℹ️ Flood data unavailable for this area</strong><br/>
+              <span style="font-size: 11px; color: #475569;">No GloFAS river gauge or precipitation reporting station for this sector.</span>
+            </div>
+          `);
+          group.addLayer(unavailMarker);
+          return;
+        }
+
+        const segCircle = L.circle(seg.coordinates, {
+          radius: 900,
+          color: seg.color,
+          fillColor: seg.color,
+          fillOpacity: seg.severity === 'CRITICAL' ? 0.35 : seg.severity === 'WARNING' ? 0.25 : 0.15,
+          weight: 2.5,
+          dashArray: seg.severity === 'CRITICAL' ? '4, 4' : '6, 6',
+        });
+
+        segCircle.bindPopup(`
+          <div style="font-family: inherit; font-size: 12px; color: #0F172A; min-width: 250px; padding: 2px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #E2E8F0; padding-bottom: 4px; margin-bottom: 6px;">
+              <strong style="color: ${seg.color}; font-size: 13px;">${seg.riskLabel} (${seg.sourceType})</strong>
+              <span style="background: ${seg.color}; color: #FFF; padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 800;">${seg.severity}</span>
+            </div>
+            <div style="font-size: 11px; color: #334155; margin-bottom: 4px;">
+              ${seg.description}
+            </div>
+            ${seg.metrics?.riverDischargeM3s ? `<div style="font-size: 11px; color: #0284C7; margin-bottom: 2px;"><strong>🌊 River Discharge:</strong> ${seg.metrics.riverDischargeM3s.toFixed(1)} m³/s</div>` : ''}
+            ${seg.metrics?.rainfallMmH ? `<div style="font-size: 11px; color: #0284C7; margin-bottom: 2px;"><strong>🌧️ Rainfall:</strong> ${seg.metrics.rainfallMmH.toFixed(1)} mm/h</div>` : ''}
+            <div style="font-size: 11px; color: #10B981; font-weight: 700; margin-top: 4px;">
+              ✓ ${seg.recommendation}
+            </div>
+          </div>
+        `);
+        group.addLayer(segCircle);
+      });
+    }
+
     // 5. Routes & Turn-by-Turn Paths in Bangalore
     if (layerRoutes) {
       candidates.forEach((cand) => {
@@ -2120,17 +2202,26 @@ export const MapPage: React.FC<MapPageProps> = ({ onNavigate: _onNavigate }) => 
           { coords: [12.9750, 77.6070] as [number, number], label: 'MG Road / Trinity Junction: Steady Flow (48%)', speed: '24 km/h', color: '#10B981' },
           { coords: [12.9780, 77.6400] as [number, number], label: 'Old Madras Road / Indiranagar: Steady (50%)', speed: '23 km/h', color: '#10B981' },
         ];
-        trafficPoints.forEach((tp) => {
-          const trafficIcon = L.divIcon({
-            className: 'custom-leaflet-marker',
-            html: `<div style="background: rgba(15,23,42,0.92); border: 1.5px solid ${tp.color}; color: ${tp.color}; padding: 2px 6px; border-radius: 8px; font-size: 10px; font-weight: 700; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.4);">🚗 ${tp.speed}</div>`,
-            iconSize: [64, 20],
-            iconAnchor: [32, 10],
+        const currentZoom = map.getZoom();
+        // Show traffic speed labels only when zoomed in (zoom >= 13) and limit to max 4 to prevent marker overlap
+        if (currentZoom >= 13) {
+          const mapBounds = map.getBounds();
+          const visibleTraffic = trafficPoints
+            .filter((tp) => mapBounds.contains(tp.coords))
+            .slice(0, 4);
+
+          visibleTraffic.forEach((tp) => {
+            const trafficIcon = L.divIcon({
+              className: 'custom-leaflet-marker',
+              html: `<div style="background: rgba(15,23,42,0.92); border: 1.5px solid ${tp.color}; color: ${tp.color}; padding: 2px 6px; border-radius: 8px; font-size: 10px; font-weight: 700; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.4);">🚗 ${tp.speed}</div>`,
+              iconSize: [64, 20],
+              iconAnchor: [32, 10],
+            });
+            const tm = L.marker(tp.coords, { icon: trafficIcon, zIndexOffset: 650 });
+            tm.bindTooltip(`<strong>${tp.label}</strong><br/>Live Speed: ${tp.speed}`, { sticky: true });
+            group.addLayer(tm);
           });
-          const tm = L.marker(tp.coords, { icon: trafficIcon, zIndexOffset: 650 });
-          tm.bindTooltip(`<strong>${tp.label}</strong><br/>Live Speed: ${tp.speed}`, { sticky: true });
-          group.addLayer(tm);
-        });
+        }
       }
 
       // Draggable Origin Pin (Start in Bangalore)
@@ -2347,11 +2438,16 @@ export const MapPage: React.FC<MapPageProps> = ({ onNavigate: _onNavigate }) => 
                 <strong>📍 Distance:</strong> <span style="font-weight: 700; color: #0284C7;">${distFromDest.toFixed(1)} km</span> from destination
               </div>
               ${fac.address ? `<div style="font-size: 11px; color: #475569; margin-bottom: 4px;"><strong>🏠 Address:</strong> ${fac.address}</div>` : ''}
-              ${fac.phone ? `<div style="font-size: 11px; color: #0284C7; margin-bottom: 4px;"><strong>📞 Emergency Contact:</strong> <a href="tel:${fac.phone}" style="color: #0284C7; text-decoration: underline; font-weight: 700;">${fac.phone}</a></div>` : ''}
+              ${fac.phone ? `<div style="font-size: 11px; color: #0284C7; margin-bottom: 4px;"><strong>📞 Phone:</strong> <a href="tel:${fac.phone}" style="color: #0284C7; text-decoration: underline; font-weight: 700;">${fac.phone}</a></div>` : ''}
+              ${fac.openingHours ? `<div style="font-size: 11px; color: #475569; margin-bottom: 4px;"><strong>🕒 Hours:</strong> ${fac.openingHours}</div>` : ''}
+              ${fac.emergency ? `<div style="font-size: 11px; color: #DC2626; margin-bottom: 4px;"><strong>🚨 Emergency:</strong> ${fac.emergency}</div>` : ''}
               ${fac.capacity ? `<div style="font-size: 11px; color: #475569; margin-bottom: 4px;"><strong>🛏️ Capacity:</strong> ${fac.capacity}</div>` : ''}
-              <div style="font-size: 11px; color: #475569; margin-bottom: 4px;">
+              <div style="font-size: 11px; color: #475569; margin-bottom: 6px;">
                 <strong>⚡ Status:</strong> <span style="color: #10B981; font-weight: 700;">${fac.status}</span>
               </div>
+              <button onclick="window.__navigateToFacility(${fac.coordinates[0]}, ${fac.coordinates[1]}, '${fac.name.replace(/'/g, "\\'")}')" style="margin-top: 4px; width: 100%; padding: 6px 12px; background: #0284C7; color: white; border: none; border-radius: 6px; font-weight: 700; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                📍 Navigate here
+              </button>
             </div>
           `);
           group.addLayer(facMarker);
@@ -3398,9 +3494,57 @@ export const MapPage: React.FC<MapPageProps> = ({ onNavigate: _onNavigate }) => 
         <button
           className="gmaps-fab"
           onClick={handleResetView}
-          title="Recenter and auto-fit active route in Bangalore"
+          title="Recenter and auto-fit active route"
         >
           ⟲
+        </button>
+
+        {/* Small Full Route Fit Button */}
+        <button
+          className="gmaps-fab"
+          onClick={() => {
+            if (candidates.length > 0 && candidates[0].waypoints.length > 0) {
+              fitRouteBounds(candidates[0].waypoints);
+            }
+          }}
+          title="Fit entire route in view (Full Route)"
+          style={{
+            fontSize: '11px',
+            fontWeight: 800,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            lineHeight: 1,
+            color: '#38BDF8',
+          }}
+        >
+          <span style={{ fontSize: '13px' }}>🛣️</span>
+          <span style={{ fontSize: '8px' }}>Route</span>
+        </button>
+
+        {/* Small Destination Street Level Button */}
+        <button
+          className="gmaps-fab"
+          onClick={() => {
+            if (mapInstanceRef.current && destinationPoint) {
+              mapInstanceRef.current.setView([destinationPoint.lat, destinationPoint.lon], 15, { animate: true });
+            }
+          }}
+          title="Zoom to destination street level"
+          style={{
+            fontSize: '11px',
+            fontWeight: 800,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            lineHeight: 1,
+            color: '#34D399',
+          }}
+        >
+          <span style={{ fontSize: '13px' }}>🏁</span>
+          <span style={{ fontSize: '8px' }}>Dest</span>
         </button>
       </div>
 
@@ -4318,6 +4462,86 @@ export const MapPage: React.FC<MapPageProps> = ({ onNavigate: _onNavigate }) => 
           </div>
         )}
       </div>
+      )}
+      {/* Floating Honest Flood Risk Legend */}
+      {layerHistorical && (
+        <div style={{
+          position: 'absolute',
+          bottom: '24px',
+          right: '80px',
+          zIndex: 800,
+          background: 'rgba(15, 23, 42, 0.94)',
+          backdropFilter: 'blur(8px)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+          borderRadius: '8px',
+          padding: '8px 12px',
+          fontSize: '11px',
+          color: '#E2E8F0',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.5)',
+          maxWidth: '240px',
+        }}>
+          <div style={{ fontWeight: 800, marginBottom: '5px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>🌊 Flood Risk Overlay</span>
+            <label style={{ cursor: 'pointer', fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <input
+                type="checkbox"
+                checked={layerHistorical}
+                onChange={(e) => setLayerHistorical(e.target.checked)}
+                style={{ width: '12px', height: '12px' }}
+              />
+              <span>Toggle</span>
+            </label>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#EF4444' }}></span>
+              <span>Red = High Risk</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#F97316' }}></span>
+              <span>Orange = Medium Risk</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#F59E0B' }}></span>
+              <span>Yellow = Low Risk</span>
+            </div>
+          </div>
+          {hasUnavailableFlood && (
+            <div style={{ marginTop: '5px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8', fontSize: '9.5px' }}>
+              ℹ️ Flood data unavailable for this area.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Honest Facility Status Notification */}
+      {facilityNotice && (
+        <div style={{
+          position: 'absolute',
+          top: '74px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 850,
+          background: 'rgba(30, 41, 59, 0.95)',
+          border: '1px solid var(--accent-cyan)',
+          borderRadius: '20px',
+          padding: '6px 16px',
+          fontSize: '11.5px',
+          color: '#F8FAFC',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+        }}>
+          <span>ℹ️</span>
+          <span>{facilityNotice}</span>
+          <span
+            onClick={() => setFacilityNotice(null)}
+            style={{ cursor: 'pointer', marginLeft: '6px', fontWeight: 700 }}
+          >
+            ×
+          </span>
+        </div>
       )}
     </div>
   );

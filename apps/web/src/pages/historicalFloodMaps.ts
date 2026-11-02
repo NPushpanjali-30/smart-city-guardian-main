@@ -1636,7 +1636,6 @@ export function getFloodZonesAlongRoute(
   const totalApproxDistKm = calculateHaversineDistanceKm(startPt[0], startPt[1], endPt[0], endPt[1]);
 
   if (matchedZones.length < 3) {
-    // Generate enough intermediate zones so the route has at least 3-4 zones covering Red, Orange, and Yellow tiers
     const sampleFractions = totalApproxDistKm > 100
       ? [0.20, 0.45, 0.70, 0.88]
       : [0.25, 0.50, 0.75];
@@ -1649,13 +1648,11 @@ export function getFloodZonesAlongRoute(
     const lonOffset = totalApproxDistKm <= 25 ? 0.0045 : totalApproxDistKm <= 80 ? 0.009 : 0.018;
 
     sampleFractions.forEach((frac, idx) => {
-      // Don't add if already enough matched zones
       if (matchedZones.length >= 4) return;
 
       const sampleIdx = Math.min(waypoints.length - 1, Math.floor(waypoints.length * frac));
       const pt = waypoints[sampleIdx];
 
-      // Check if there is already a matched zone very close to this sample point
       const alreadyNearby = matchedZones.some(
         (z) => calculateHaversineDistanceKm(pt[0], pt[1], z.coordinates[0], z.coordinates[1]) < (totalApproxDistKm <= 25 ? 2.0 : 15.0)
       );
@@ -1679,8 +1676,8 @@ export function getFloodZonesAlongRoute(
         vulnerabilityScore: scoreBase[idx % scoreBase.length],
         criticalRainfallThresholdMmh: thresholds[idx % thresholds.length],
         elevationMeters: Math.round(150 + Math.abs(pt[0] * 10) % 300),
-        hydrologyType: 'Highway Lowland Runoff & Drainage Depression Basin',
-        historicalNotes: `Dynamic corridor flood risk overlay modeled from meteorological forecast and terrain runoff depression along active route.`,
+        hydrologyType: 'Highway Lowland Runoff & Drainage Depression Basin (Simulated scenario)',
+        historicalNotes: `Simulated scenario: corridor flood risk overlay modeled from meteorological forecast and terrain runoff depression along active route.`,
         affectedCorridors: ['Primary Navigation Highway Corridor'],
         safeAlternativeDetours: ['Elevated Bypass / Service Lane Deviation'],
       };
@@ -1689,7 +1686,7 @@ export function getFloodZonesAlongRoute(
     });
   }
 
-  // 3. Fallback: only default to HISTORICAL_FLOOD_ZONES if no route waypoints or genuinely in Bengaluru
+  // 3. Fallback: only default to HISTORICAL_FLOOD_ZONES if in Bengaluru area or explicitly requested
   const isBengaluruArea = startPt && (startPt[0] >= 12.8 && startPt[0] <= 13.2 && startPt[1] >= 77.4 && startPt[1] <= 77.8);
   const finalZones = matchedZones.length > 0 ? matchedZones : (isBengaluruArea ? HISTORICAL_FLOOD_ZONES : []);
 

@@ -150,6 +150,14 @@ export const AlertsPage: React.FC = () => {
         const d = extract10Digits(saved);
         if (d) return d;
       }
+      const profile = localStorage.getItem('smartcity_user_profile');
+      if (profile) {
+        const parsed = JSON.parse(profile);
+        if (parsed.phoneNumber) {
+          const d = extract10Digits(parsed.phoneNumber);
+          if (d) return d;
+        }
+      }
       return '9876543210';
     } catch {
       return '9876543210';
@@ -420,21 +428,24 @@ export const AlertsPage: React.FC = () => {
       }
 
       try {
-        const tbRes = await fetch('https://api.textbee.dev/api/v1/gateway/send-sms', {
+        const tbRes = await fetch('/api/v1/alerts/send-sms', {
           method: 'POST',
           headers: {
-            'x-api-key': textbeeApiKey.trim(),
             'Content-Type': 'application/json',
+            Authorization: 'Bearer mock_jwt_token_admin',
+            'x-user-role': 'ADMIN',
           },
           body: JSON.stringify({
-            recipients: [recipientE164],
+            phoneNumber: recipientE164,
             message: activeMessage,
-            ...(textbeeDeviceId.trim() ? { deviceId: textbeeDeviceId.trim() } : {}),
+            zone: testZone,
+            severity,
+            language,
           }),
         });
         const tbData = await tbRes.json().catch(() => ({}));
-        if (tbRes.ok) {
-          const reqId = tbData.data?.id || tbData.id || `TB_${Date.now()}`;
+        if (tbRes.ok && tbData.success) {
+          const reqId = tbData.dispatch?.messageId || `TB_${Date.now()}`;
           const newRecord: FeedAlert = {
             id: `alt-live-${reqId}`,
             severity,
@@ -451,7 +462,7 @@ export const AlertsPage: React.FC = () => {
           };
           setAlertsFeed((prev) => [newRecord, ...prev]);
           setStatusFeedback({
-            text: `📡 Real Cellular SMS dispatched to ${recipientE164} via TextBee Gateway! (ID: ${reqId})`,
+            text: `✅ SMS sent to ${recipientE164} via TextBee Gateway! (ID: ${reqId})`,
           });
           setIsSubmitting(false);
           return;
@@ -754,6 +765,32 @@ export const AlertsPage: React.FC = () => {
     }
   };
 
+  // Test Gateway Connection
+  const handleTestConnection = async () => {
+    setIsTestingGateway(true);
+    setGatewayStatus(null);
+    try {
+      const res = await fetch('/api/v1/alerts/sms/test-connection', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer mock_jwt_token_admin',
+          'x-user-role': 'ADMIN',
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setGatewayStatus(`✅ ${data.message || 'TextBee Gateway connected successfully.'}`);
+      } else {
+        setGatewayStatus(`❌ ${data.message || 'Connection test failed. Check TextBee configuration in backend environment.'}`);
+      }
+    } catch (err: any) {
+      setGatewayStatus(`❌ Gateway error: ${err.message || 'Connection error'}`);
+    } finally {
+      setIsTestingGateway(false);
+    }
+  };
+
   // Test Live SMS Gateway
   const handleTestSmsGateway = async () => {
     setIsTestingGateway(true);
@@ -787,41 +824,29 @@ export const AlertsPage: React.FC = () => {
       // Backend unavailable, fallback to direct client-side test
     }
 
-    // Direct client-side test send for TextBee or Fast2SMS
+    // Backend TextBee Gateway Connection and Delivery Test
     if (selectedGatewayType === 'textbee') {
-      const recipientE164 = phoneNumber.trim().startsWith('+') ? phoneNumber.trim() : `+91${phoneNumber.trim().replace(/\D/g, '')}`;
-      if (textbeeTestMode) {
-        setGatewayStatus(`✅ TextBee Safe Test Mode: Simulated SMS delivery test for ${recipientE164} succeeded without cellular billing.`);
-        setIsTestingGateway(false);
-        return;
-      }
-      if (!textbeeApiKey.trim()) {
-        setGatewayStatus(`❌ TextBee API key required for live test send.`);
-        setIsTestingGateway(false);
-        return;
-      }
       try {
-        const tbRes = await fetch('https://api.textbee.dev/api/v1/gateway/send-sms', {
+        const testConnRes = await fetch('/api/v1/alerts/sms/test-connection', {
           method: 'POST',
           headers: {
-            'x-api-key': textbeeApiKey.trim(),
             'Content-Type': 'application/json',
+            Authorization: 'Bearer mock_jwt_token_admin',
+            'x-user-role': 'ADMIN',
           },
-          body: JSON.stringify({
-            recipients: [recipientE164],
-            message: `[SmartCity Guardian] Test Alert: EOC TextBee Gateway verified at ${new Date().toLocaleTimeString()}`,
-            ...(textbeeDeviceId.trim() ? { deviceId: textbeeDeviceId.trim() } : {}),
-          }),
         });
-        const tbData = await tbRes.json().catch(() => ({}));
-        if (tbRes.ok) {
-          setGatewayStatus(`✅ Live SMS verified and queued via TextBee to ${recipientE164}! ID: ${tbData.data?.id || tbData.id || 'sent'}`);
+        const connData = await testConnRes.json().catch(() => ({}));
+        if (testConnRes.ok && connData.success) {
+          setGatewayStatus(`✅ ${connData.message || 'TextBee Gateway verified successfully.'}`);
         } else {
-          setGatewayStatus(`❌ TextBee Gateway Error: ${tbData.message || tbData.error || 'Request rejected'}`);
+          setGatewayStatus(`❌ ${connData.message || 'TextBee test failed. Verify credentials in backend environment.'}`);
         }
       } catch (err: any) {
-        setGatewayStatus(`❌ TextBee Network Error: ${err?.message || 'Connection failure'}`);
+        setGatewayStatus(`❌ TextBee Gateway error: ${err?.message || 'Connection failure'}`);
+      } finally {
+        setIsTestingGateway(false);
       }
+      return;
     } else if (selectedGatewayType === 'fast2sms' && fast2smsApiKey.trim()) {
       let cleanDigits = phoneNumber.trim().replace(/\D/g, '');
       if (cleanDigits.startsWith('91') && cleanDigits.length === 12) cleanDigits = cleanDigits.slice(2);
@@ -1811,6 +1836,16 @@ export const AlertsPage: React.FC = () => {
 
             {/* Modal Actions */}
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '6px' }}>
+              <button
+                type="button"
+                onClick={handleTestConnection}
+                disabled={isTestingGateway}
+                className="btn btn-secondary"
+                style={{ fontSize: '0.8rem', padding: '8px 14px', borderColor: 'var(--accent-cyan)' }}
+              >
+                {isTestingGateway ? 'Testing...' : '📡 Test Connection'}
+              </button>
+
               <button
                 type="button"
                 onClick={handleTestSmsGateway}
