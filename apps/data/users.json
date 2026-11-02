@@ -66,14 +66,14 @@
     "updatedAt": "2026-11-02T10:04:27.906Z"
   },
   {
-    "id": "user-mvz3er8f-odyy",
-    "email": "test.driver.1793613886122@smartcity.org",
+    "id": "user-mvz3f5n3-8ue5",
+    "email": "test.driver.1793613904446@smartcity.org",
     "fullName": "Rohan Sharma",
     "phoneNumber": "+919845012345",
     "role": "CITIZEN",
     "smsEnabled": true,
     "minSeverityThreshold": "WARNING",
-    "createdAt": "2026-11-02T10:05:06.015Z",
-    "updatedAt": "2026-11-02T10:05:06.057Z"
+    "createdAt": "2026-11-02T10:05:24.687Z",
+    "updatedAt": "2026-11-02T10:05:24.725Z"
   }
 ]
