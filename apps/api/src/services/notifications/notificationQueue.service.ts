@@ -84,12 +84,11 @@ export class NotificationQueueService extends EventEmitter {
       }
 
       // Check environment variables if no config file or type was not explicitly 'mock'
-      if (process.env.TEXTBEE_API_KEY) {
-        logger.info('[NotificationQueueService] Initialized TextBee Gateway from TEXTBEE_API_KEY environment variable');
+      if (process.env.SMS_PROVIDER === 'textbee' || process.env.TEXTBEE_API_KEY) {
+        logger.info('[NotificationQueueService] Initialized TextBee Gateway from environment variable');
         return new TextBeeSmsAdapter({
           apiKey: process.env.TEXTBEE_API_KEY,
           deviceId: process.env.TEXTBEE_DEVICE_ID,
-          testMode: process.env.TEXTBEE_TEST_MODE !== 'false',
         });
       }
       if (process.env.FAST2SMS_API_KEY) {
@@ -295,11 +294,12 @@ export class NotificationQueueService extends EventEmitter {
     // Trigger queue worker immediately so dispatch status is authoritative
     await this.processQueue();
 
+    const isSuccess = record.status === 'DELIVERED' || record.status === 'SENT_TO_PROVIDER';
     return {
-      success: true,
+      success: isSuccess,
       recordId,
-      status: record.status || 'DELIVERED',
-      reason: evaluation.reason,
+      status: record.status || (isSuccess ? 'DELIVERED' : 'FAILED'),
+      reason: record.error || evaluation.reason,
       record,
     };
   }

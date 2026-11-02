@@ -63,9 +63,9 @@ export const ProfilePage: React.FC = () => {
         const p = JSON.parse(cached);
         if (p.phoneNumber) return p.phoneNumber;
       }
-      return localStorage.getItem(STORAGE_KEY_PHONE) || '+919876543210';
+      return localStorage.getItem(STORAGE_KEY_PHONE) || '';
     } catch {
-      return '+919876543210';
+      return '';
     }
   });
 
@@ -78,7 +78,7 @@ export const ProfilePage: React.FC = () => {
         if (p.phoneNumber) return maskPhone(p.phoneNumber);
       }
     } catch {}
-    return maskPhone('+919876543210');
+    return '';
   });
 
   const [smsOptIn, setSmsOptIn] = useState(() => {
@@ -202,19 +202,23 @@ export const ProfilePage: React.FC = () => {
 
     const cleanPhone = phoneNumber.trim();
     const digitsOnly = extract10Digits(cleanPhone);
-    if (!cleanPhone || digitsOnly.length !== 10) {
-      setErrorMessage('Please enter a valid 10-digit Indian mobile number (e.g. 9876543210).');
-      setIsLoading(false);
-      return;
-    }
-    if (!/^[6-9]/.test(digitsOnly)) {
-      setErrorMessage('Indian mobile number must begin with digits 6, 7, 8, or 9.');
-      setIsLoading(false);
-      return;
-    }
+    let formattedE164: string | null = null;
+    let calculatedMasked = '';
 
-    const formattedE164 = `+91${digitsOnly}`;
-    let calculatedMasked = maskPhone(formattedE164);
+    if (digitsOnly.length > 0) {
+      if (digitsOnly.length !== 10) {
+        setErrorMessage('Indian mobile number must be exactly 10 digits.');
+        setIsLoading(false);
+        return;
+      }
+      if (!/^[6-9]/.test(digitsOnly)) {
+        setErrorMessage('Indian mobile number must begin with digits 6, 7, 8, or 9.');
+        setIsLoading(false);
+        return;
+      }
+      formattedE164 = `+91${digitsOnly}`;
+      calculatedMasked = maskPhone(formattedE164);
+    }
 
     // 1. Attempt authoritative backend sync if available
     try {
@@ -234,7 +238,7 @@ export const ProfilePage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: 'demo-user-1',
-          phoneNumber: formattedE164,
+          phoneNumber: formattedE164 || undefined,
           smsOptIn,
           preferredLanguage,
           minSeverity,
@@ -254,18 +258,18 @@ export const ProfilePage: React.FC = () => {
         }
       }
     } catch {
-      // Backend unavailable or running as static GitHub Pages deployment
+      // Backend unavailable or running as static deployment
     }
 
     // 2. Persist to state and browser localStorage for zero-failure demo continuity
-    setPhoneNumber(formattedE164);
+    setPhoneNumber(formattedE164 || '');
     setPhoneNumberMasked(calculatedMasked);
 
     try {
       const profileToSave = {
         name: citizenName,
         email: citizenEmail,
-        phoneNumber: cleanPhone,
+        phoneNumber: formattedE164,
         phoneNumberMasked: calculatedMasked,
         smsOptIn,
         inAppOptIn,
@@ -274,7 +278,11 @@ export const ProfilePage: React.FC = () => {
         alertRadiusKm,
       };
       localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(profileToSave));
-      localStorage.setItem(STORAGE_KEY_PHONE, cleanPhone);
+      if (formattedE164) {
+        localStorage.setItem(STORAGE_KEY_PHONE, formattedE164);
+      } else {
+        localStorage.removeItem(STORAGE_KEY_PHONE);
+      }
       window.dispatchEvent(new CustomEvent('smartcity_profile_updated', { detail: profileToSave }));
     } catch {}
 
@@ -324,19 +332,19 @@ export const ProfilePage: React.FC = () => {
 
       {(!phoneNumber || extract10Digits(phoneNumber).length < 10) && (
         <div style={{
-          padding: '14px 18px',
+          padding: '12px 18px',
           borderRadius: '8px',
-          background: 'rgba(245, 158, 11, 0.15)',
-          border: '1px solid rgba(245, 158, 11, 0.5)',
-          color: '#fde68a',
+          background: 'rgba(56, 189, 248, 0.12)',
+          border: '1px solid rgba(56, 189, 248, 0.35)',
+          color: '#7dd3fc',
           fontSize: '0.88rem',
           display: 'flex',
           alignItems: 'center',
-          gap: '10px',
+          gap: '12px',
         }}>
-          <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+          <span style={{ fontSize: '1.25rem' }}>💡</span>
           <span>
-            <strong>Action Required:</strong> Please enter and save your 10-digit Indian mobile number (+91) below to receive critical flood advisories and SMS evacuation alerts.
+            <strong>Phone number not configured:</strong> Add your 10-digit Indian mobile number (+91) below to receive emergency SMS flood advisories and evacuation alerts directly on your device.
           </span>
         </div>
       )}
@@ -362,16 +370,16 @@ export const ProfilePage: React.FC = () => {
               <div style={{ fontWeight: 600, fontSize: '0.95rem', marginTop: '2px' }}>{citizenEmail}</div>
             </div>
             <div>
-              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>PRIVACY MASKED PHONE</div>
-              <div className="font-mono" style={{ fontWeight: 700, fontSize: '0.95rem', marginTop: '2px', color: 'var(--accent-cyan)' }}>
-                {phoneNumberMasked || '+91 78*** ***91'}
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>REGISTERED PHONE</div>
+              <div className="font-mono" style={{ fontWeight: 700, fontSize: '0.95rem', marginTop: '2px', color: (phoneNumber && extract10Digits(phoneNumber).length === 10) ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
+                {(phoneNumber && extract10Digits(phoneNumber).length === 10) ? (phoneNumberMasked || maskPhone(phoneNumber)) : 'Not configured'}
               </div>
             </div>
           </div>
 
           <div style={{ marginTop: '10px' }}>
             <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
-              Mobile Phone Number (🇮🇳 +91 Fixed)
+              Mobile Phone Number (🇮🇳 +91 Fixed) <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>(Optional)</span>
             </label>
             <div style={{ display: 'flex', alignItems: 'stretch' }}>
               <div style={{
@@ -415,7 +423,7 @@ export const ProfilePage: React.FC = () => {
               />
             </div>
             <p style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-              Locked to India (+91). Just enter your 10-digit mobile number ({extract10Digits(phoneNumber).length}/10 digits).
+              Locked to India (+91). Optional — enter your 10-digit mobile number ({extract10Digits(phoneNumber).length}/10 digits, starts with 6-9) to enable SMS alerts.
             </p>
           </div>
         </div>

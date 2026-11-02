@@ -6,7 +6,7 @@ export interface UserRecord {
   id: string;
   email: string;
   fullName: string;
-  phoneNumber: string; // Stored in strict E.164 (+91XXXXXXXXXX)
+  phoneNumber: string | null; // Stored in strict E.164 (+91XXXXXXXXXX) or null for existing users
   role: 'CITIZEN' | 'ADMIN';
   smsEnabled: boolean;
   minSeverityThreshold: 'WATCH' | 'WARNING' | 'CRITICAL';
@@ -69,7 +69,7 @@ export class UserStore {
       id: 'user-001',
       email: 'citizen@smartcity.org',
       fullName: 'Metro Resident',
-      phoneNumber: '+919876543210',
+      phoneNumber: null,
       role: 'CITIZEN',
       smsEnabled: true,
       minSeverityThreshold: 'WARNING',
@@ -81,7 +81,7 @@ export class UserStore {
       id: 'admin-001',
       email: 'admin@smartcity.org',
       fullName: 'EOC Commander',
-      phoneNumber: '+919876543210',
+      phoneNumber: null,
       role: 'ADMIN',
       smsEnabled: true,
       minSeverityThreshold: 'WARNING',
@@ -123,22 +123,30 @@ export class UserStore {
 
   /**
    * Database migration:
-   * Migrates any existing user phone numbers to strict E.164 (+91XXXXXXXXXX) format
-   * without breaking existing users.
+   * Adds nullable phoneNumber column to users table.
+   * Existing users without an Indian mobile number get NULL.
+   * Preserves NULL for citizen@smartcity.org and does not break existing accounts.
    */
   public runMigrations(): void {
     let migratedCount = 0;
     for (const [id, user] of this.users.entries()) {
-      if (!user.phoneNumber || !isValidIndianMobileE164(user.phoneNumber)) {
-        try {
-          const normalized = normalizeIndianMobile(user.phoneNumber || '9876543210');
-          user.phoneNumber = normalized;
-          user.updatedAt = new Date().toISOString();
-          this.users.set(id, user);
-          migratedCount++;
-        } catch {
-          // Fallback to default valid number
-          user.phoneNumber = '+919876543210';
+      if (user.email === 'citizen@smartcity.org' && user.phoneNumber === '+919876543210') {
+        user.phoneNumber = null;
+        user.updatedAt = new Date().toISOString();
+        this.users.set(id, user);
+        migratedCount++;
+      } else if (user.phoneNumber === undefined) {
+        user.phoneNumber = null;
+        user.updatedAt = new Date().toISOString();
+        this.users.set(id, user);
+        migratedCount++;
+      } else if (user.phoneNumber !== null) {
+        if (!isValidIndianMobileE164(user.phoneNumber)) {
+          try {
+            user.phoneNumber = normalizeIndianMobile(user.phoneNumber);
+          } catch {
+            user.phoneNumber = null;
+          }
           user.updatedAt = new Date().toISOString();
           this.users.set(id, user);
           migratedCount++;
@@ -168,12 +176,12 @@ export class UserStore {
   public createUser(params: {
     email: string;
     fullName: string;
-    phoneNumber: string;
+    phoneNumber?: string | null;
     role?: 'CITIZEN' | 'ADMIN';
     smsEnabled?: boolean;
     minSeverityThreshold?: 'WATCH' | 'WARNING' | 'CRITICAL';
   }): UserRecord {
-    const normalizedPhone = normalizeIndianMobile(params.phoneNumber);
+    const normalizedPhone = params.phoneNumber ? normalizeIndianMobile(params.phoneNumber) : null;
     const existing = this.getUserByEmail(params.email);
     if (existing) {
       // Update existing record
@@ -206,20 +214,26 @@ export class UserStore {
 
   public updateUser(
     id: string,
-    updates: Partial<Omit<UserRecord, 'id' | 'email' | 'createdAt'>>
+    updates: Partial<Omit<UserRecord, 'id' | 'email' | 'createdAt'>> & { phoneNumber?: string | null }
   ): UserRecord {
     const user = this.users.get(id);
     if (!user) {
       throw new Error(`User with ID ${id} not found`);
     }
 
+    let phone = user.phoneNumber;
     if (updates.phoneNumber !== undefined) {
-      updates.phoneNumber = normalizeIndianMobile(updates.phoneNumber);
+      if (updates.phoneNumber === null || updates.phoneNumber === '') {
+        phone = null;
+      } else {
+        phone = normalizeIndianMobile(updates.phoneNumber);
+      }
     }
 
     const updatedUser: UserRecord = {
       ...user,
       ...updates,
+      phoneNumber: phone,
       updatedAt: new Date().toISOString(),
     };
 

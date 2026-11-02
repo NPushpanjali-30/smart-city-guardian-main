@@ -158,13 +158,13 @@ export const AlertsPage: React.FC = () => {
           if (d) return d;
         }
       }
-      return '9876543210';
+      return '';
     } catch {
-      return '9876543210';
+      return '';
     }
   });
 
-  const phoneNumber = `+91${phoneDigits}`;
+  const phoneNumber = phoneDigits ? `+91${phoneDigits}` : '';
   const [testZone, setTestZone] = useState('Bay Basin Lowlands');
   const [severity, setSeverity] = useState<FloodSeverity>('CRITICAL');
   const [language, setLanguage] = useState<LanguageCode>('en');
@@ -179,15 +179,18 @@ export const AlertsPage: React.FC = () => {
   const [health, setHealth] = useState<ProviderHealth | null>(DEFAULT_DEMO_HEALTH);
   const [simulationMode, setSimulationMode] = useState<string>('SUCCESS');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [statusFeedback, setStatusFeedback] = useState<{ text: string; error?: boolean; canBypass?: boolean } | null>(null);
 
-  // Sync phone number if updated from ProfilePage
+  // Sync phone number if updated from ProfilePage or login
   useEffect(() => {
     const handleProfileUpdate = (e: any) => {
-      const phone = e?.detail?.phoneNumber || localStorage.getItem('smartcity_profile_phone');
+      const phone = e?.detail?.phoneNumber ?? localStorage.getItem('smartcity_profile_phone');
       if (phone) {
         const d = extract10Digits(phone);
-        if (d) setPhoneDigits(d);
+        setPhoneDigits(d);
+      } else {
+        setPhoneDigits('');
       }
     };
     window.addEventListener('smartcity_profile_updated', handleProfileUpdate);
@@ -318,6 +321,34 @@ export const AlertsPage: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  const handleTestDispatcherConnection = async () => {
+    setIsTestingConnection(true);
+    setStatusFeedback(null);
+    try {
+      const res = await fetch('/api/v1/alerts/sms/test-connection');
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setStatusFeedback({
+          text: `✓ ${data.message || 'TextBee connected successfully. Device is online.'}`,
+          error: false,
+        });
+      } else {
+        const errorDetail = data.message || (data.status === 'MISSING_KEY' ? 'Missing TextBee API key (TEXTBEE_API_KEY in .env)' : (data.status === 'MISSING_DEVICE_ID' ? 'Missing TextBee Device ID (TEXTBEE_DEVICE_ID in .env)' : 'Device is offline or credentials missing.'));
+        setStatusFeedback({
+          text: `❌ Test connection failed: ${errorDetail}`,
+          error: true,
+        });
+      }
+    } catch (err: any) {
+      setStatusFeedback({
+        text: `❌ Test connection failed: ${err.message || 'Network error reaching server.'}`,
+        error: true,
+      });
+    } finally {
+      setIsTestingConnection(false);
+    }
+  };
+
   const handleDispatch = async (e?: React.FormEvent, forceBypass = bypassCooldown) => {
     if (e) e.preventDefault();
     setIsSubmitting(true);
@@ -332,15 +363,25 @@ export const AlertsPage: React.FC = () => {
       return;
     }
 
+    if (!/^[6-9]/.test(phoneDigits)) {
+      setStatusFeedback({
+        text: '❌ Indian mobile number must begin with digits 6, 7, 8, or 9.',
+        error: true,
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
     const cleanPhone = `+91${phoneDigits}`;
 
-    // 1. First attempt authoritative backend dispatch
+    // Authoritative backend dispatch
     try {
+      const token = localStorage.getItem('smartcity_token');
       const res = await fetch('/api/v1/alerts/dispatch', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer mock_jwt_token_admin',
+          'Authorization': token ? `Bearer ${token}` : 'Bearer mock_jwt_token_admin',
           'x-user-role': 'ADMIN',
         },
         body: JSON.stringify({
@@ -359,54 +400,11 @@ export const AlertsPage: React.FC = () => {
         }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          const providerName = data.record?.provider || health?.activeProvider || 'SMS Gateway';
-          const isLive = health?.providerIsLive;
-          setStatusFeedback({
-            text: `Alert dispatched successfully (${data.status}) to ${cleanPhone} via ${providerName} ${isLive ? '📡 (Live Gateway)' : '🧪 (Simulation Engine)'}.`,
-          });
-          await fetchAlertsAndHealth();
-          setIsSubmitting(false);
-          return;
-        } else {
-          const isCooldown = data.reason?.includes('cooldown') || data.message?.includes('cooldown');
-          setStatusFeedback({
-            text: `Dispatch suppressed or rejected: ${data.reason || data.message || 'Policy threshold not met'}`,
-            error: true,
-            canBypass: isCooldown,
-          });
-          await fetchAlertsAndHealth();
-          setIsSubmitting(false);
-          return;
-        }
-      }
-    } catch {
-      // Backend unavailable or running as static GitHub Pages deployment
-    }
-
-    // 2. Client-Side Live/Simulated TextBee or Fast2SMS Dispatch (When running on GitHub Pages / without Express backend)
-    if (selectedGatewayType === 'textbee') {
-      let cleanDigits = cleanPhone.replace(/\D/g, '');
-      if (cleanDigits.startsWith('91') && cleanDigits.length === 12) cleanDigits = cleanDigits.slice(2);
-      else if (cleanDigits.startsWith('0') && cleanDigits.length === 11) cleanDigits = cleanDigits.slice(1);
-
-      if (cleanDigits.length !== 10) {
-        setStatusFeedback({
-          text: `❌ Indian mobile dispatch requires a 10-digit number (e.g. 9876543210 or +919876543210). Received: ${cleanPhone}`,
-          error: true,
-        });
-        setIsSubmitting(false);
-        return;
-      }
-
-      const recipientE164 = `+91${cleanDigits}`;
-
-      if (textbeeTestMode || !textbeeApiKey.trim()) {
-        const simId = `tb_sim_${Date.now()}`;
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success && (data.status === 'DELIVERED' || data.status === 'SENT_TO_PROVIDER')) {
+        const providerName = 'SmartCity Sovereign SMS Engine';
         const newRecord: FeedAlert = {
-          id: `alt-tb-${simId}`,
+          id: data.record?.id || `alt-eng-${Date.now().toString(36)}`,
           severity,
           headline: `${severity} ADVISORY: ${testZone}`,
           body: activeMessage,
@@ -414,207 +412,51 @@ export const AlertsPage: React.FC = () => {
           dispatchedAt: new Date().toISOString(),
           recipientsReached: 1,
           status: 'DELIVERED',
-          recipientMasked: maskPhoneNumber(cleanDigits),
+          recipientMasked: maskPhoneNumber(phoneDigits),
           language,
           encoding: analysis.encoding,
           segmentCount: analysis.segmentCount,
         };
         setAlertsFeed((prev) => [newRecord, ...prev]);
-        setStatusFeedback({
-          text: `📱 Disaster SMS verified and simulated via TextBee Gateway (Safe Test Mode - No real SMS billed) to ${recipientE164}. Target Zone: ${testZone}.`,
-        });
-        setIsSubmitting(false);
-        return;
-      }
 
-      try {
-        const tbRes = await fetch('/api/v1/alerts/send-sms', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer mock_jwt_token_admin',
-            'x-user-role': 'ADMIN',
-          },
-          body: JSON.stringify({
-            phoneNumber: recipientE164,
-            message: activeMessage,
-            zone: testZone,
-            severity,
-            language,
-          }),
-        });
-        const tbData = await tbRes.json().catch(() => ({}));
-        if (tbRes.ok && tbData.success) {
-          const reqId = tbData.dispatch?.messageId || `TB_${Date.now()}`;
-          const newRecord: FeedAlert = {
-            id: `alt-live-${reqId}`,
-            severity,
-            headline: `${severity} ADVISORY: ${testZone}`,
-            body: activeMessage,
-            smsSummary: activeMessage,
-            dispatchedAt: new Date().toISOString(),
-            recipientsReached: 1,
-            status: 'DELIVERED',
-            recipientMasked: maskPhoneNumber(cleanDigits),
-            language,
-            encoding: analysis.encoding,
-            segmentCount: analysis.segmentCount,
+        setHealth((prev) => {
+          const base = prev || DEFAULT_DEMO_HEALTH;
+          const total = (base.totalDispatched || 0) + 1;
+          const delivered = (base.deliveredCount || 0) + 1;
+          return {
+            ...base,
+            activeProvider: providerName,
+            providerIsLive: true,
+            totalDispatched: total,
+            deliveredCount: delivered,
+            sentToProviderCount: total,
+            deliverySuccessRatePercent: Number(((delivered / total) * 100).toFixed(1)),
           };
-          setAlertsFeed((prev) => [newRecord, ...prev]);
-          setStatusFeedback({
-            text: `✅ SMS sent to ${recipientE164} via TextBee Gateway! (ID: ${reqId})`,
-          });
-          setIsSubmitting(false);
-          return;
-        } else {
-          const errMsg = tbData.message || tbData.error || 'TextBee rejected request';
-          setStatusFeedback({ text: `❌ TextBee Error: ${errMsg}`, error: true });
-          setIsSubmitting(false);
-          return;
-        }
-      } catch (err: any) {
-        setStatusFeedback({ text: `❌ TextBee Network Exception: ${err?.message || 'Network failure'}`, error: true });
-        setIsSubmitting(false);
-        return;
-      }
-    }
+        });
 
-    if (selectedGatewayType === 'fast2sms' && fast2smsApiKey.trim()) {
-      let cleanDigits = cleanPhone.replace(/\D/g, '');
-      if (cleanDigits.startsWith('91') && cleanDigits.length === 12) cleanDigits = cleanDigits.slice(2);
-      else if (cleanDigits.startsWith('0') && cleanDigits.length === 11) cleanDigits = cleanDigits.slice(1);
-
-      if (cleanDigits.length !== 10) {
         setStatusFeedback({
-          text: `❌ Indian mobile dispatch requires a 10-digit number (e.g. 9876543210 or +919876543210). Received: ${cleanPhone}`,
-          error: true,
+          text: `✓ SMS sent to ${cleanPhone} (Message ID: ${data.record?.id || data.recordId || 'DELIVERED'} via ${providerName})`,
+          error: false,
         });
-        setIsSubmitting(false);
-        return;
-      }
-
-      try {
-        const isUnicode = analysis.encoding === 'UCS-2' || /[^\x00-\x7F]/.test(activeMessage);
-        const f2sRes = await fetch('https://www.fast2sms.com/dev/bulkV2', {
-          method: 'POST',
-          headers: {
-            authorization: fast2smsApiKey.trim(),
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          body: JSON.stringify({
-            route: 'q',
-            message: activeMessage,
-            language: isUnicode ? 'unicode' : 'english',
-            flash: 0,
-            numbers: cleanDigits,
-          }),
-        });
-
-        const f2sData = await f2sRes.json();
-        if (f2sRes.ok && f2sData.return !== false) {
-          const reqId = f2sData.request_id || `F2S_${Date.now()}`;
-          const newRecord: FeedAlert = {
-            id: `alt-live-${reqId}`,
-            severity,
-            headline: `${severity} ADVISORY: ${testZone}`,
-            body: activeMessage,
-            smsSummary: activeMessage,
-            dispatchedAt: new Date().toISOString(),
-            recipientsReached: 1,
-            status: 'DELIVERED',
-            recipientMasked: maskPhoneNumber(cleanDigits),
-            language,
-            encoding: analysis.encoding,
-            segmentCount: analysis.segmentCount,
-          };
-          setAlertsFeed((prev) => [newRecord, ...prev]);
-          setStatusFeedback({
-            text: `📡 Real Cellular SMS successfully dispatched to +91 ${cleanDigits} via Fast2SMS Carrier! (Request ID: ${reqId})`,
-          });
-          setIsSubmitting(false);
-          return;
-        } else {
-          const errorMsg = Array.isArray(f2sData.message)
-            ? f2sData.message.join(', ')
-            : (f2sData.message || 'Fast2SMS carrier rejected request');
-          setStatusFeedback({
-            text: `❌ Fast2SMS Carrier Error: ${errorMsg}. (Check that your API key is valid and has sufficient wallet balance).`,
-            error: true,
-          });
-          setIsSubmitting(false);
-          return;
-        }
-      } catch (err: any) {
+        await fetchAlertsAndHealth();
+      } else {
+        const isCooldown = data.reason?.includes('cooldown') || data.message?.includes('cooldown');
+        const reason = data.reason || data.message || data.error || (res.status === 422 ? 'Dispatch suppressed by policy or gateway failed' : `HTTP ${res.status}`);
         setStatusFeedback({
-          text: `❌ Failed to connect to Fast2SMS gateway: ${err?.message || 'Network error'}`,
+          text: `❌ Failed to send SMS: ${reason}`,
           error: true,
+          canBypass: isCooldown,
         });
-        setIsSubmitting(false);
-        return;
+        await fetchAlertsAndHealth();
       }
+    } catch (err: any) {
+      setStatusFeedback({
+        text: `❌ Failed to send SMS: ${err.message || 'Network failure communicating with server'}`,
+        error: true,
+      });
+    } finally {
+      setIsSubmitting(false);
     }
-
-    // 3. Direct Engine Dispatch (Built-in Free Sovereign Telecom Engine)
-    // Dispatches directly from the engine - zero configuration or external apps required
-    const reqId = `ENG_IN_${Date.now().toString(36).toUpperCase()}_${Math.floor(1000 + Math.random() * 9000)}`;
-    const providerName = 'SmartCity Sovereign SMS Engine';
-
-    const newRecord: FeedAlert = {
-      id: `alt-eng-${Date.now().toString(36)}`,
-      severity,
-      headline: `${severity} ADVISORY: ${testZone}`,
-      body: activeMessage,
-      smsSummary: activeMessage,
-      dispatchedAt: new Date().toISOString(),
-      recipientsReached: 1,
-      status: 'DELIVERED',
-      recipientMasked: maskPhoneNumber(phoneDigits),
-      language,
-      encoding: analysis.encoding,
-      segmentCount: analysis.segmentCount,
-    };
-
-    setAlertsFeed((prev) => [newRecord, ...prev]);
-
-    // Dispatch Native Android Push Notification + Buzzer Alarm + In-App Heads-Up Banner to all devices
-    disasterNotificationService.notifyDisaster({
-      id: newRecord.id,
-      title: `🚨 ${severity} DISASTER ALERT: ${testZone}`,
-      headline: `${severity} ADVISORY: ${testZone}`,
-      body: activeMessage,
-      severity: severity === 'CRITICAL' ? 'CRITICAL' : 'WARNING',
-      type: 'FLOOD',
-      location: testZone,
-      waterDepthCm: severity === 'CRITICAL' ? 44 : 26,
-      leadTimeMinutes: 15,
-      recommendedAction: detourName ? `Take elevated detour via ${detourName}` : 'Avoid low-lying underpasses',
-      detourCorridor: detourName,
-      coordinates: [12.9172, 77.6228],
-      timestamp: newRecord.dispatchedAt,
-      source: 'Disaster Emergency Alert Center',
-      buzzerAlert: true,
-    }, true);
-
-    setHealth((prev) => {
-      const base = prev || DEFAULT_DEMO_HEALTH;
-      const total = base.totalDispatched + 1;
-      const delivered = base.deliveredCount + 1;
-      return {
-        ...base,
-        activeProvider: providerName,
-        providerIsLive: true,
-        totalDispatched: total,
-        deliveredCount: delivered,
-        sentToProviderCount: total,
-        deliverySuccessRatePercent: Number(((delivered / total) * 100).toFixed(1)),
-      };
-    });
-
-    setStatusFeedback({
-      text: `✅ Alert dispatched via Sovereign Telecom Engine (Ref: ${reqId} · ${analysis.encoding} ${analysis.segmentCount} seg to +91 ${phoneDigits}).`,
-    });
-    setIsSubmitting(false);
   };
 
   const handleRetry = async (recordId: string) => {
@@ -1129,9 +971,32 @@ export const AlertsPage: React.FC = () => {
             <form onSubmit={handleDispatch} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {/* Recipient Phone (Locked to India +91) */}
               <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                  Target Recipient Mobile (🇮🇳 +91 Fixed)
-                </label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                    Target Recipient Mobile (🇮🇳 +91 Fixed)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleTestDispatcherConnection}
+                    disabled={isTestingConnection}
+                    style={{
+                      background: 'rgba(6, 182, 212, 0.12)',
+                      border: '1px solid var(--accent-cyan)',
+                      color: 'var(--accent-cyan)',
+                      borderRadius: '4px',
+                      padding: '2px 8px',
+                      fontSize: '0.72rem',
+                      fontWeight: 600,
+                      cursor: isTestingConnection ? 'not-allowed' : 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    {isTestingConnection ? 'Testing...' : '⚡ Test connection'}
+                  </button>
+                </div>
                 <div style={{ display: 'flex', alignItems: 'stretch' }}>
                   <div style={{
                     display: 'flex',

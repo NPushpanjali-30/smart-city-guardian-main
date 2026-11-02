@@ -21,7 +21,7 @@ interface RegisterPageProps {
 export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate, onRoleChange }) => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('+919876543210');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [smsConsent, setSmsConsent] = useState(true);
   const [severityThreshold, setSeverityThreshold] = useState('WARNING');

@@ -29,7 +29,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onRoleChange }
       if (res.ok) {
         const data = await res.json();
         const user = data.user || {};
-        const phone = user.phoneNumber || '+919876543210';
+        const phone = user.phoneNumber || null;
 
         localStorage.setItem('smartcity_token', data.accessToken || '');
         localStorage.setItem('smartcity_user_profile', JSON.stringify({
@@ -39,7 +39,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onRoleChange }
           phoneNumber: phone,
           role: user.role || targetRole,
         }));
-        localStorage.setItem('smartcity_profile_phone', phone);
+        if (phone) {
+          localStorage.setItem('smartcity_profile_phone', phone);
+        } else {
+          localStorage.removeItem('smartcity_profile_phone');
+        }
         window.dispatchEvent(new CustomEvent('smartcity_profile_updated', {
           detail: {
             id: user.id,
@@ -59,16 +63,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onRoleChange }
       }
     } catch {
       // Local demo fallback
-      const defaultPhone = '+919876543210';
       localStorage.setItem('smartcity_user_profile', JSON.stringify({
         name: isAdmin ? 'EOC Commander' : 'Metro Resident',
         email: email.trim(),
-        phoneNumber: defaultPhone,
+        phoneNumber: null,
         role: targetRole,
       }));
-      localStorage.setItem('smartcity_profile_phone', defaultPhone);
+      localStorage.removeItem('smartcity_profile_phone');
       window.dispatchEvent(new CustomEvent('smartcity_profile_updated', {
-        detail: { email, phoneNumber: defaultPhone, role: targetRole },
+        detail: { email, phoneNumber: null, role: targetRole },
       }));
       onRoleChange(targetRole);
       onNavigate(isAdmin ? '/admin' : '/dashboard');

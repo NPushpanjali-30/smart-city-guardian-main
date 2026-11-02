@@ -1,7 +1,13 @@
 import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
 import { z } from 'zod';
 
 dotenv.config();
+const apiEnv = path.resolve(process.cwd(), 'apps/api/.env');
+if (fs.existsSync(apiEnv)) {
+  dotenv.config({ path: apiEnv });
+}
 
 const ConfigSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),

@@ -3,7 +3,7 @@
     "id": "user-001",
     "email": "citizen@smartcity.org",
     "fullName": "Metro Resident",
-    "phoneNumber": "+919876543210",
+    "phoneNumber": null,
     "role": "CITIZEN",
     "smsEnabled": true,
     "minSeverityThreshold": "WARNING",
@@ -14,7 +14,7 @@
     "id": "admin-001",
     "email": "admin@smartcity.org",
     "fullName": "EOC Commander",
-    "phoneNumber": "+919876543210",
+    "phoneNumber": null,
     "role": "ADMIN",
     "smsEnabled": true,
     "minSeverityThreshold": "WARNING",
@@ -25,7 +25,7 @@
     "id": "user-mvz2zq12-7sl5",
     "email": "admin.eoc@smartcity.org",
     "fullName": "EOC Commander",
-    "phoneNumber": "+919876543210",
+    "phoneNumber": null,
     "role": "ADMIN",
     "smsEnabled": true,
     "minSeverityThreshold": "WARNING",
@@ -75,5 +75,60 @@
     "minSeverityThreshold": "WARNING",
     "createdAt": "2026-11-02T10:05:24.687Z",
     "updatedAt": "2026-11-02T10:05:24.725Z"
+  },
+  {
+    "id": "user-mvz9r8zn-9vbm",
+    "email": "test.driver.1793624549035@smartcity.org",
+    "fullName": "Rohan Sharma",
+    "phoneNumber": "+919845012345",
+    "role": "CITIZEN",
+    "smsEnabled": true,
+    "minSeverityThreshold": "WARNING",
+    "createdAt": "2026-11-02T13:02:46.595Z",
+    "updatedAt": "2026-11-02T13:02:46.629Z"
+  },
+  {
+    "id": "user-mvzabbrb-g1a4",
+    "email": "test.driver.1793625482473@smartcity.org",
+    "fullName": "Rohan Sharma",
+    "phoneNumber": "+919845012345",
+    "role": "CITIZEN",
+    "smsEnabled": true,
+    "minSeverityThreshold": "WARNING",
+    "createdAt": "2026-11-02T13:18:23.303Z",
+    "updatedAt": "2026-11-02T13:18:23.339Z"
+  },
+  {
+    "id": "user-mvzac2jc-pa23",
+    "email": "test.driver.1793625518053@smartcity.org",
+    "fullName": "Rohan Sharma",
+    "phoneNumber": "+919845012345",
+    "role": "CITIZEN",
+    "smsEnabled": true,
+    "minSeverityThreshold": "WARNING",
+    "createdAt": "2026-11-02T13:18:58.009Z",
+    "updatedAt": "2026-11-02T13:18:58.040Z"
+  },
+  {
+    "id": "user-mvzadk3e-ztuw",
+    "email": "newuser_1793625607402@smartcity.org",
+    "fullName": "Aarav Sharma",
+    "phoneNumber": "+919845012345",
+    "role": "CITIZEN",
+    "smsEnabled": true,
+    "minSeverityThreshold": "WARNING",
+    "createdAt": "2026-11-02T13:20:07.418Z",
+    "updatedAt": "2026-11-02T13:20:07.418Z"
+  },
+  {
+    "id": "user-mvzaeq2s-d4lz",
+    "email": "newuser_1793625661817@smartcity.org",
+    "fullName": "Aarav Sharma",
+    "phoneNumber": "+919845012345",
+    "role": "CITIZEN",
+    "smsEnabled": true,
+    "minSeverityThreshold": "WARNING",
+    "createdAt": "2026-11-02T13:21:01.828Z",
+    "updatedAt": "2026-11-02T13:21:01.828Z"
   }
 ]

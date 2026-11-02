@@ -431,9 +431,9 @@ alertsRouter.all('/sms/test-connection', async (req: Request, res: Response) => 
     }
 
     res.status(200).json({
-      status: result.status,
-      success: true,
       ...result,
+      status: result.status,
+      success: result.success,
     });
   } catch (err: any) {
     res.status(500).json({

@@ -29,14 +29,15 @@ const LoginSchema = z.object({
 
 const UpdateProfileSchema = z.object({
   fullName: z.string().min(2).optional(),
-  phoneNumber: z.string().refine((val) => {
+  phoneNumber: z.string().nullable().optional().refine((val) => {
+    if (val === undefined || val === null || val === '') return true;
     try {
       normalizeIndianMobile(val);
       return true;
     } catch {
       return false;
     }
-  }, { message: 'Must be a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9' }).optional(),
+  }, { message: 'Must be a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9' }),
   smsConsent: z.boolean().optional(),
   minSeverityThreshold: z.enum(['WATCH', 'WARNING', 'CRITICAL']).optional(),
 });
@@ -57,12 +58,14 @@ authRouter.post('/register', (req: Request, res: Response) => {
       minSeverityThreshold: data.minSeverityThreshold,
     });
 
-    // Sync notification preferences
-    userPreferenceService.updatePreferences(user.id, {
-      phoneNumber: user.phoneNumber,
-      smsOptIn: user.smsEnabled,
-      minSeverity: user.minSeverityThreshold,
-    });
+    // Sync notification preferences if phone is provided
+    if (user.phoneNumber) {
+      userPreferenceService.updatePreferences(user.id, {
+        phoneNumber: user.phoneNumber,
+        smsOptIn: user.smsEnabled,
+        minSeverity: user.minSeverityThreshold,
+      });
+    }
 
     const accessToken = generateJwt({
       id: user.id,
@@ -109,7 +112,7 @@ authRouter.post('/login', (req: Request, res: Response) => {
       user = userStore.createUser({
         email: data.email,
         fullName: isAdmin ? 'EOC Commander' : 'Metro Resident',
-        phoneNumber: '+919876543210',
+        phoneNumber: null,
         role: isAdmin ? 'ADMIN' : 'CITIZEN',
       });
     }
@@ -159,7 +162,7 @@ authRouter.get('/me', (req: Request, res: Response) => {
       id: 'user-001',
       email: reqEmail,
       fullName: req.user?.fullName || 'Metro Resident',
-      phoneNumber: '+919876543210',
+      phoneNumber: null,
       role: (req.user?.role as 'CITIZEN' | 'ADMIN') || 'CITIZEN',
       smsEnabled: true,
       minSeverityThreshold: 'WARNING',
@@ -199,20 +202,20 @@ authRouter.put('/profile', (req: Request, res: Response) => {
       user = userStore.createUser({
         email,
         fullName: data.fullName || 'Metro Resident',
-        phoneNumber: data.phoneNumber || '+919876543210',
+        phoneNumber: data.phoneNumber || null,
       });
     } else {
       user = userStore.updateUser(user.id, {
         ...(data.fullName ? { fullName: data.fullName } : {}),
-        ...(data.phoneNumber ? { phoneNumber: data.phoneNumber } : {}),
+        ...(data.phoneNumber !== undefined ? { phoneNumber: data.phoneNumber } : {}),
         ...(data.smsConsent !== undefined ? { smsEnabled: data.smsConsent } : {}),
         ...(data.minSeverityThreshold ? { minSeverityThreshold: data.minSeverityThreshold } : {}),
       });
     }
 
-    if (data.phoneNumber) {
+    if (data.phoneNumber !== undefined) {
       userPreferenceService.updatePreferences(user.id, {
-        phoneNumber: user.phoneNumber,
+        phoneNumber: user.phoneNumber || undefined,
       });
     }
 
@@ -242,14 +245,17 @@ authRouter.put('/profile', (req: Request, res: Response) => {
  */
 authRouter.get('/verify', (req: Request, res: Response) => {
   if (!req.user) {
-    return res.status(401).json({
+    res.status(401).json({
       valid: false,
-      message: 'No valid authentication session found',
+      authenticated: false,
+      message: 'No active authenticated session',
     });
+    return;
   }
 
   res.status(200).json({
     valid: true,
+    authenticated: true,
     user: req.user,
   });
 });
