@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://smart-city-guardian-main.onrender.com/api/:path*" },
+    { "source": "/health", "destination": "https://smart-city-guardian-main.onrender.com/health" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
