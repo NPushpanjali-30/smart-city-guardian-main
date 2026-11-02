@@ -24,7 +24,7 @@ RUN npm ci
 # Copy full source tree
 COPY packages/shared/ ./packages/shared/
 COPY apps/api/ ./apps/api/
-COPY tsconfig.json ./
+COPY tsconfig.base.json ./
 
 # Build shared library and API service
 RUN npm --prefix packages/shared run build
